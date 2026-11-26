@@ -1,5 +1,7 @@
 {
   "titre": "Accueil",
   "lieu": "",
-  "siteUrl": "https://yungnate.github.io/planning-accueil/"
+  "siteUrl": "https://yungnate.github.io/planning-accueil/",
+  "depot": "yungNATE/planning-accueil",
+  "branche": "main"
 }

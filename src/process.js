@@ -20,13 +20,23 @@ import { fileURLToPath } from 'node:url';
 import * as XLSXModule from 'xlsx';
 import { parsePlanning } from './parse-planning.js';
 import { buildCalendar, employeeEvents } from './ics.js';
-import { renderIndex } from './site.js';
+import { renderIndex, renderUpload } from './site.js';
 import { capitalize, formatDateFr, monthLabel } from './util.js';
 
 /** @type {any} */
 const XLSX = /** @type {any} */ (XLSXModule).read ? XLSXModule : /** @type {any} */ (XLSXModule).default;
 
-const DEFAULT_SETTINGS = { titre: 'Accueil', lieu: '', siteUrl: '' };
+const DEFAULT_SETTINGS = { titre: 'Accueil', lieu: '', siteUrl: '', depot: '', branche: 'main' };
+const SRC_DIR = path.dirname(fileURLToPath(import.meta.url));
+/** Modules du parser réutilisés tels quels par la page d'ajout, dans le navigateur. */
+const BROWSER_MODULES = ['parse-planning.js', 'util.js', 'names.js'];
+
+/** Dossier racine du paquet SheetJS installé (celui qui contient son package.json). */
+function sheetjsDir() {
+  let dir = path.dirname(fileURLToPath(import.meta.resolve('xlsx')));
+  while (!existsSync(path.join(dir, 'package.json')) && path.dirname(dir) !== dir) dir = path.dirname(dir);
+  return dir;
+}
 
 /** @param {string} file */
 export const isPlanningFile = (file) => /\.xlsx$/i.test(file) && !path.basename(file).startsWith('~$');
@@ -221,8 +231,14 @@ export function runProcess(options) {
   };
   writeJson(path.join(publicDir, 'manifest.json'), manifest);
   writeFileSync(path.join(publicDir, 'index.html'), renderIndex(manifest, settings));
-  mkdirSync(path.join(publicDir, 'assets'), { recursive: true });
-  for (const asset of ['styles.css', 'app.js']) copyFileSync(path.join(root, 'site', asset), path.join(publicDir, 'assets', asset));
+  writeFileSync(path.join(publicDir, 'ajouter.html'), renderUpload(manifest, settings, aliases));
+  const assetsDir = path.join(publicDir, 'assets');
+  for (const dir of ['lib', 'vendor']) mkdirSync(path.join(assetsDir, dir), { recursive: true });
+  for (const asset of ['styles.css', 'app.js', 'upload.js']) copyFileSync(path.join(root, 'site', asset), path.join(assetsDir, asset));
+  for (const mod of BROWSER_MODULES) copyFileSync(path.join(SRC_DIR, mod), path.join(assetsDir, 'lib', mod));
+  copyFileSync(path.join(sheetjsDir(), 'xlsx.mjs'), path.join(assetsDir, 'vendor', 'xlsx.js'));
+  const license = path.join(sheetjsDir(), 'LICENSE');
+  if (existsSync(license)) copyFileSync(license, path.join(assetsDir, 'vendor', 'LICENSE-sheetjs.txt'));
   writeFileSync(path.join(publicDir, 'robots.txt'), 'User-agent: *\nDisallow: /\n');
 
   report.failed = report.files.some((f) => f.errors.length > 0);

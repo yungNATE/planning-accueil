@@ -10,6 +10,31 @@ Sur la page, chacun choisit le mois, puis son nom, et récupère ses horaires da
 
 ## Ajouter le planning du mois
 
+### Depuis le site
+
+1. En bas de la page des plannings, cliquez sur **Ajouter un planning** (ou ouvrez directement https://yungnate.github.io/planning-accueil/ajouter.html).
+2. La première fois, enregistrez une **clé d’accès GitHub** (voir ci-dessous).
+3. Choisissez le fichier Excel. La page le vérifie aussitôt avec le même lecteur que la publication : mois, période, prénoms, nombre de créneaux, et les éventuels problèmes avec la case concernée.
+4. Cliquez sur **Publier ce planning**. La page suit la mise en ligne et confirme quand le mois est publié, en général en moins d’une minute.
+
+Un fichier qui contient une erreur ne peut pas être publié : la page indique quoi corriger.
+
+**Créer la clé d’accès (une seule fois par appareil)**
+
+Le site n’a pas de serveur : c’est votre navigateur qui enregistre le fichier dans le dépôt, avec une clé que GitHub vous délivre.
+
+1. Connecté au compte propriétaire du dépôt, ouvrez https://github.com/settings/personal-access-tokens/new
+2. Nom : « Plannings accueil » ; choisissez une date d’expiration.
+3. « Repository access » : « Only select repositories », puis `planning-accueil`.
+4. « Permissions » : **Contents** en « Read and write », **Actions** en « Read-only ».
+5. Validez, copiez la clé (elle commence par `github_pat_`) et collez-la sur la page d’ajout.
+
+La clé reste dans le navigateur de l’appareil (ou seulement le temps de la session si vous décochez « Mémoriser »). Elle ne donne accès qu’à ce dépôt. « Oublier la clé », en bas de la page d’ajout, l’efface de l’appareil ; pour la désactiver complètement, supprimez-la sur GitHub au même endroit. À l’expiration, créez-en une nouvelle de la même façon.
+
+Ne partagez cette clé qu’avec des personnes de confiance : elle permet de modifier les fichiers du dépôt.
+
+### Depuis GitHub
+
 1. Ouvrez le dossier [`plannings`](plannings) du dépôt.
 2. Cliquez sur **Add file**, puis **Upload files**, et déposez le fichier Excel (`.xlsx`).
 3. Cliquez sur **Commit changes**.
@@ -64,7 +89,8 @@ Utile après une modification de l’outil ou de la configuration : onglet **Act
 - `config/settings.json`
   - `titre` : début du nom des événements et des agendas (`Accueil 15h30–23h`) ;
   - `lieu` : lieu ajouté à chaque événement (vide par défaut) ;
-  - `siteUrl` : adresse publique du site.
+  - `siteUrl` : adresse publique du site ;
+  - `depot` et `branche` : dépôt et branche où la page d’ajout enregistre les fichiers.
 - `config/aliases.json` : correspondances de prénoms, par exemple `{ "SYLV": "SYLVAIN" }`. Une entrée vers lui-même (`{ "LEO": "LEO" }`) empêche tout rapprochement automatique avec un prénom proche.
 
 Après une modification de la configuration, retraitez tous les plannings (voir ci-dessus).
@@ -73,7 +99,8 @@ Après une modification de la configuration, retraitez tous les plannings (voir 
 
 - `src/parse-planning.js` lit la grille Excel (SheetJS) sans coordonnées fixes : titre, lignes de jours, cellules fusionnées, prénoms, horaires.
 - `src/ics.js` écrit les fichiers iCalendar (RFC 5545) avec le fuseau `Europe/Paris` : les horaires restent justes aux changements d’heure.
-- `src/process.js` traite les fichiers déposés, écrit `data/<AAAA-MM>.json` et `public/ics/<AAAA-MM>/<prénom>.ics`, puis reconstruit les abonnements `public/ics/<prénom>.ics`, le manifeste et la page.
+- `src/process.js` traite les fichiers déposés, écrit `data/<AAAA-MM>.json` et `public/ics/<AAAA-MM>/<prénom>.ics`, puis reconstruit les abonnements `public/ics/<prénom>.ics`, le manifeste et les pages.
+- `site/upload.js` (page d’ajout) réutilise dans le navigateur `parse-planning.js`, `util.js`, `names.js` et SheetJS, copiés dans `public/assets/` à chaque publication, puis enregistre le fichier via l’API GitHub (`PUT /repos/…/contents/plannings/…`) et suit l’exécution de l’Action.
 - `.github/workflows/publier.yml` lance les tests, la conversion, enregistre les fichiers générés dans le dépôt, puis publie `public/` sur GitHub Pages.
 
 En local (Node 22 ou plus) :
