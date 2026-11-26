@@ -124,3 +124,16 @@ test('suivi de la publication', async () => {
   assert.match(calls.at(-1).url, new RegExp(`actions/runs\\?head_sha=${sha}`));
   assert.equal((await post('suivi', { motDePasse: 'Jardin Lune 42', sha: 'x' })).status, 400);
 });
+
+test('exécution annulée et remplacée : le suivi passe à l’exécution suivante', async () => {
+  const sha = 'e'.repeat(40);
+  let latest = { status: 'in_progress', conclusion: null, html_url: 'https://github.com/run/2' };
+  github = (url) => (url.includes('head_sha=')
+    ? Response.json({ workflow_runs: [{ status: 'completed', conclusion: 'cancelled', html_url: 'https://github.com/run/1' }] })
+    : Response.json({ workflow_runs: [latest] }));
+  const etat = async () => (await (await post('suivi', { motDePasse: 'Jardin Lune 42', sha })).json());
+  assert.deepEqual(await etat(), { etat: 'en-cours', lien: 'https://github.com/run/2' });
+  latest = { status: 'completed', conclusion: 'success', html_url: 'https://github.com/run/2' };
+  assert.deepEqual(await etat(), { etat: 'publie', lien: 'https://github.com/run/2' });
+  assert.match(calls.at(-1).url, /actions\/workflows\/publier\.yml\/runs\?branch=main/);
+});

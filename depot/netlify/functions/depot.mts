@@ -9,6 +9,7 @@
 //   MOT_DE_PASSE       mot de passe demandé sur la page d'ajout
 //   DEPOT              facultatif, « propriétaire/dépôt » (défaut : yungNATE/planning-accueil)
 //   BRANCHE            facultatif (défaut : main)
+//   WORKFLOW           facultatif, fichier du workflow de publication (défaut : publier.yml)
 //   ORIGINE_AUTORISEE  facultatif, site autorisé à appeler le service (défaut : https://yungnate.github.io)
 //
 // Routes (POST, JSON) :
@@ -23,7 +24,8 @@ const MAX_BYTES = 4 * 1024 * 1024; // limite des fonctions Netlify : 6 Mo encod�
 const FAILED_PASSWORD_DELAY_MS = 1000;
 const GITHUB_API = "https://api.github.com";
 
-type Settings = { token: string; password: string; repo: string; branch: string; origin: string };
+type Settings = { token: string; password: string; repo: string; branch: string; origin: string; workflow: string };
+type Run = { status: string; conclusion: string | null; html_url: string };
 type Body = Record<string, unknown>;
 
 function env(key: string, fallback = ""): string {
@@ -38,6 +40,7 @@ function settings(): Settings {
     repo: env("DEPOT", "yungNATE/planning-accueil"),
     branch: env("BRANCHE", "main"),
     origin: env("ORIGINE_AUTORISEE", "https://yungnate.github.io"),
+    workflow: env("WORKFLOW", "publier.yml"),
   };
 }
 
@@ -127,13 +130,26 @@ async function deposer(body: Body, s: Settings): Promise<Response> {
   return reply(200, { sha: commit?.sha ?? "" }, s.origin);
 }
 
+async function runs(s: Settings, query: string): Promise<Run[] | Response> {
+  const response = await github(s, `/repos/${s.repo}/actions/${query}`);
+  if (!response.ok) return githubFailure(response.status, s.origin);
+  return ((await response.json()) as { workflow_runs?: Run[] }).workflow_runs ?? [];
+}
+
 async function suivi(body: Body, s: Settings): Promise<Response> {
   const sha = typeof body.sha === "string" ? body.sha : "";
   if (!/^[0-9a-f]{40}$/.test(sha)) return fail(400, "sha", "Identifiant de dépôt invalide.", s.origin);
-  const response = await github(s, `/repos/${s.repo}/actions/runs?head_sha=${sha}&per_page=1`);
-  if (!response.ok) return githubFailure(response.status, s.origin);
-  const run = ((await response.json()) as { workflow_runs?: { status: string; conclusion: string | null; html_url: string }[] }).workflow_runs?.[0];
+  const own = await runs(s, `runs?head_sha=${sha}&per_page=1`);
+  if (own instanceof Response) return own;
+  let run = own[0];
   if (!run) return reply(200, { etat: "attente" }, s.origin);
+  if (run.status === "completed" && run.conclusion === "cancelled") {
+    // Exécution remplacée par une plus récente : celle-ci rattrape tous les fichiers en attente.
+    const latest = await runs(s, `workflows/${encodeURIComponent(s.workflow)}/runs?branch=${encodeURIComponent(s.branch)}&per_page=1`);
+    if (latest instanceof Response) return latest;
+    if (latest[0]) run = latest[0];
+    if (run.conclusion === "cancelled") return reply(200, { etat: "en-cours", lien: run.html_url }, s.origin);
+  }
   if (run.status !== "completed") return reply(200, { etat: "en-cours", lien: run.html_url }, s.origin);
   return reply(200, { etat: run.conclusion === "success" ? "publie" : "echec", lien: run.html_url }, s.origin);
 }

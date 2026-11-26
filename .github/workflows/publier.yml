@@ -25,10 +25,12 @@ permissions:
   pages: write
   id-token: write
 
-# Deux dépôts rapprochés sont traités l'un après l'autre, sans annulation.
+# Plusieurs dépôts rapprochés sont mis en file et traités l'un après l'autre, sans annulation
+# (sans « queue: max », GitHub ne garde qu'une exécution en attente et annule les autres).
 concurrency:
   group: pages
   cancel-in-progress: false
+  queue: max
 
 jobs:
   publier:
@@ -37,9 +39,12 @@ jobs:
       name: github-pages
       url: ${{ steps.deploiement.outputs.page_url || steps.deploiement2.outputs.page_url }}
     steps:
+      # Toujours l'état le plus récent de main (y compris les fichiers générés par l'exécution précédente),
+      # pas le commit qui a déclenché l'exécution.
       - name: Récupérer le dépôt
         uses: actions/checkout@v6
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Installer Node.js
@@ -69,7 +74,7 @@ jobs:
               node src/process.js --all
             fi
           else
-            node src/process.js --since "$AVANT"
+            node src/process.js --pending "$AVANT"
           fi
 
       # Le commit du bot passe par GITHUB_TOKEN : il ne redéclenche pas ce workflow.

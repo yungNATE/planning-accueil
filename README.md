@@ -31,6 +31,14 @@ C’est tout : quelques minutes plus tard, le mois apparaît sur la page. Le sui
 
 Seul le fichier déposé est converti. Les mois déjà publiés ne sont pas modifiés.
 
+## Classement des mois et dépôts successifs
+
+- Chaque fichier est rangé d’après le **mois de son titre**, jamais d’après son nom ni sa date de dépôt. La page affiche les mois du plus récent au plus ancien, le plus récent étant mis en avant : déposer décembre puis octobre donne bien « Décembre 2026 » en haut.
+- **Plusieurs fichiers d’un coup** (plusieurs fichiers dans un même « Upload files » sur GitHub) : une seule publication les traite tous.
+- **Plusieurs dépôts d’affilée** (par exemple quatre fichiers envoyés l’un après l’autre depuis la page d’ajout) : chaque dépôt est mis en file d’attente et publié à son tour, environ 30 secondes chacun. Rien n’est perdu ni annulé.
+- Si deux fichiers du **même mois** arrivent, celui déposé **en dernier** fait foi.
+- `data/etat.json` retient le dernier dépôt traité : si une publication échoue ou est interrompue, la suivante rattrape tous les fichiers en attente.
+
 ## Corriger un planning
 
 Déposez la version corrigée dans `plannings/`, sous le même nom ou un autre. Le mois indiqué dans son titre est **entièrement remplacé** par cette nouvelle version (y compris si une personne a été retirée).

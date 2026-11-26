@@ -2,7 +2,8 @@
 /**
  * Traitement des plannings déposés : seul ce module touche au disque et à git.
  *
- *   node src/process.js --since <sha>     fichiers ajoutés ou modifiés depuis ce commit (push)
+ *   node src/process.js --pending [<sha>] fichiers déposés depuis le dernier traitement (data/etat.json),
+ *                                         ou depuis <sha> si aucun traitement n'est encore noté (push)
  *   node src/process.js --file <nom>      un fichier précis (plusieurs --file possibles)
  *   node src/process.js --all             tous les plannings du dossier plannings/
  *   node src/process.js --site-only       aucun planning, page et abonnements régénérés
@@ -53,20 +54,61 @@ function writeJson(file, value) {
   writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+/** @param {string} root @param {string[]} args */
+const git = (root, args) => execFileSync('git', args, { cwd: root }).toString('utf8');
+
+/** @param {string} root @param {string | undefined} sha */
+function commitExists(root, sha) {
+  if (!sha || /^0+$/.test(sha)) return false;
+  try {
+    execFileSync('git', ['cat-file', '-e', `${sha}^{commit}`], { cwd: root, stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Plannings ajoutés, modifiés ou renommés depuis un commit. null = impossible à déterminer (tout traiter).
+ * Plannings ajoutés, modifiés ou renommés depuis un commit, dans l'ordre chronologique de leur dernier
+ * changement : si deux fichiers du même mois arrivent dans la même fournée, le plus récent l'emporte.
+ * files = null : point de départ inconnu, tout retraiter.
  * @param {string} root
  * @param {string | undefined} since
+ * @returns {{ files: string[] | null, head: string }}
  */
-export function changedPlannings(root, since) {
-  if (!since || /^0+$/.test(since)) return null;
-  try {
-    execFileSync('git', ['cat-file', '-e', `${since}^{commit}`], { cwd: root, stdio: 'ignore' });
-  } catch {
-    return null;
+export function pendingPlannings(root, since) {
+  const head = git(root, ['rev-parse', 'HEAD']).trim();
+  if (!commitExists(root, since)) return { files: null, head };
+  const out = git(root, ['-c', 'core.quotepath=false', 'log', '--reverse', '--format=@%H', '--name-only', '--diff-filter=AMR', `${since}..HEAD`, '--', 'plannings']);
+  /** @type {Map<string, true>} */
+  const order = new Map();
+  for (const line of out.split('\n')) {
+    const file = line.trim();
+    if (!file || file.startsWith('@')) continue;
+    order.delete(file);
+    order.set(file, true);
   }
-  const out = execFileSync('git', ['diff', '--name-only', '-z', '--diff-filter=AMR', since, 'HEAD', '--', 'plannings'], { cwd: root }).toString('utf8');
-  return out.split('\0').filter(Boolean).filter(isPlanningFile);
+  const files = [...order.keys()].filter(isPlanningFile).filter((f) => existsSync(path.join(root, f)));
+  return { files, head };
+}
+
+/**
+ * Traite tous les plannings en attente depuis le dernier traitement réussi (data/etat.json),
+ * puis note le commit traité. Un dépôt dont l'exécution a été annulée ou a échoué avant
+ * l'enregistrement est donc rattrapé par l'exécution suivante.
+ * @param {{ root: string, fallbackSince?: string, now?: Date }} options
+ */
+export function runPending(options) {
+  const root = path.resolve(options.root);
+  const stateFile = path.join(root, 'data', 'etat.json');
+  const state = readJson(stateFile, {});
+  const since = commitExists(root, state.dernierCommitTraite) ? state.dernierCommitTraite : options.fallbackSince;
+  const { files, head } = pendingPlannings(root, since);
+  const report = files === null
+    ? runProcess({ root, all: true, now: options.now })
+    : runProcess({ root, files, now: options.now });
+  writeJson(stateFile, { dernierCommitTraite: head });
+  return report;
 }
 
 /** @param {string} root */
@@ -289,21 +331,26 @@ function main() {
   const files = [];
   let all = false;
   let siteOnly = false;
+  /** @type {string | null} */
+  let pending = null;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--all') all = true;
     else if (arg === '--site-only') siteOnly = true;
     else if (arg === '--file') { if (args[i + 1]) files.push(args[++i]); }
-    else if (arg === '--since') {
-      const changed = changedPlannings(root, args[++i]);
-      if (changed === null) all = true;
-      else files.push(...changed);
-    } else {
+    else if (arg === '--pending') pending = args[i + 1] && !args[i + 1].startsWith('--') ? args[++i] : '';
+    else {
       console.error(`Option inconnue : ${arg}`);
       process.exit(2);
     }
   }
-  const report = runProcess({ root, files: siteOnly ? [] : files, all: siteOnly ? false : all });
+  let report;
+  if (pending !== null) report = runPending({ root, fallbackSince: pending });
+  else if (siteOnly) report = runProcess({ root, files: [] });
+  else {
+    report = runProcess({ root, files, all });
+    if (all) writeJson(path.join(root, 'data', 'etat.json'), { dernierCommitTraite: git(root, ['rev-parse', 'HEAD']).trim() });
+  }
   const summary = formatReport(report);
   console.log(summary);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);
