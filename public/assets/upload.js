@@ -309,7 +309,7 @@ publishButton.addEventListener('click', async () => {
       setStatus('success',
         `Planning ${ofMonth(label)} publié. `,
         link('./', 'Voir les plannings'),
-        ' (si le mois n’apparaît pas encore, rechargez la page dans une ou deux minutes).');
+        ' (si le mois n’apparaît pas encore, rechargez la page dans quelques minutes).');
       PUBLISHED.add(parsed.month);
     } else {
       setStatus('error', 'Le fichier est enregistré, mais la publication a échoué. ', link(run.html_url, 'Voir le détail sur GitHub'), '.');
