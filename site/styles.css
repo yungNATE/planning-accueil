@@ -324,7 +324,20 @@ a.person__download:hover { text-decoration: underline; }
 
 /* Sans JavaScript : les boutons ne peuvent pas ouvrir la fenêtre, on affiche le tableau */
 
-.no-js .months { display: none; }
+.no-js .months,
+.no-js .older { display: none; }
+
+.js .fallback-wrap { display: none; }
+
+.older { margin-top: 1rem; }
+
+.older summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.5rem 0;
+}
+
+.older .months { margin-top: 0.5rem; }
 
 .fallback {
   width: 100%;
@@ -477,7 +490,7 @@ code {
   background: var(--surface);
 }
 
-.preview h3 { margin: 0; font-size: 1.375rem; font-weight: 750; }
+
 .preview__period { margin: 0.25rem 0 1rem; font-weight: 550; }
 
 .preview__table { width: 100%; border-collapse: collapse; margin-bottom: 0.5rem; }
@@ -514,3 +527,31 @@ code {
 
 .token-info { margin-top: 2rem; color: var(--muted); font-size: 0.9375rem; }
 .preview__table thead th:last-child { text-align: right; }
+
+.field-hint {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+.file-card + .file-card {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+}
+
+.file-card__name {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.planning + .planning { margin-top: 1.25rem; }
+
+.planning h4 { margin: 0; font-size: 1.25rem; font-weight: 750; }
+
+.file-card__status { margin: 0.75rem 0 0; font-weight: 600; }
+.file-card__status:empty { display: none; }
+
+.preview > .notice { margin-top: 1.25rem; }

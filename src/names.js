@@ -2,6 +2,22 @@
 /** Normalisation et rapprochement des noms d'employés (module pur). */
 
 /**
+ * Retire d'un nom les annotations : « TOM (stagiaire) », « LÉA* », « SAM. » → « TOM », « LÉA », « SAM ».
+ * @param {string} raw
+ */
+export function cleanName(raw) {
+  const cleaned = String(raw ?? '')
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
+    .replace(/[*•]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.,;:]+$/, '')
+    .trim();
+  return cleaned || String(raw ?? '').trim();
+}
+
+/**
  * Clé de comparaison : majuscules, sans accents, tirets et apostrophes remplacés par des espaces.
  * « Jean-Pierre », « JEAN PIERRE » et « jean  pierre » donnent la même clé.
  * @param {unknown} raw
@@ -33,7 +49,12 @@ export function displayName(raw) {
  * @param {string} raw
  */
 export function slugify(raw) {
-  return nameKey(raw).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const slug = nameKey(raw).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  if (slug) return slug;
+  // Nom sans aucune lettre latine (alphabet non latin) : identifiant stable dérivé du nom
+  let hash = 5381;
+  for (const ch of nameKey(raw)) hash = ((hash * 33) ^ ch.codePointAt(0)) >>> 0;
+  return `personne-${hash.toString(36)}`;
 }
 
 /**

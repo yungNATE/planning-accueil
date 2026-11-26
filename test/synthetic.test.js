@@ -85,11 +85,15 @@ test('horaires sans nom : erreur', () => {
   assert.match(p.errors[0].message, /aucun nom/);
 });
 
-test('une semaine entièrement vide garde l’employé, sans créneau', () => {
+test('semaine entièrement vide : OFF pour une personne présente ailleurs, ignorée sinon', () => {
   const p = parsePlanning(roundTrip(buildPlanning({
-    title: 'PLANNING OCTOBRE 2026', start: '2026-09-28', weeks: 1, people: { ALICE: fill(7, '8H-12H'), BRUNO: fill(7, '') },
+    title: 'PLANNING OCTOBRE 2026',
+    start: '2026-09-28',
+    weeks: 2,
+    people: { ALICE: [...fill(7, '8H-12H'), ...fill(7, '')], BRUNO: fill(14, '') },
   })));
-  assert.deepEqual(p.employees.map((e) => [e.name, e.slotCount]), [['Alice', 7], ['Bruno', 0]]);
+  assert.deepEqual(p.employees.map((e) => [e.name, e.slotCount]), [['Alice', 7]]);
+  assert.equal(p.employees[0].days['2026-10-10'].slots.length, 0, 'semaine vide d’Alice comptée OFF');
 });
 
 test('alias : un nom épinglé n’est pas rapproché automatiquement', () => {

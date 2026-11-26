@@ -13,11 +13,11 @@ Sur la page, chacun choisit le mois, puis son nom, et récupère ses horaires da
 ### Depuis le site (le plus simple)
 
 1. En bas de la page des plannings, cliquez sur **Ajouter un planning** (ou ouvrez https://yungnate.github.io/planning-accueil/ajouter.html).
-2. La première fois, saisissez le **mot de passe de dépôt** et laissez « Mémoriser sur cet appareil » coché : il ne sera plus demandé.
-3. Choisissez le fichier Excel. La page le vérifie aussitôt avec le même lecteur que la publication : mois, période, prénoms, nombre de créneaux, et les éventuels problèmes avec la case concernée.
-4. Cliquez sur **Publier ce planning**. La page suit la mise en ligne et confirme quand le mois est publié, en général en moins d’une minute.
+2. La première fois, saisissez le **mot de passe de dépôt** (l’indice affiché sous le champ se règle dans `config/settings.json`) et laissez « Mémoriser sur cet appareil » coché : il ne sera plus demandé.
+3. Choisissez un ou plusieurs fichiers. La page les vérifie aussitôt avec le même lecteur que la publication : mois, période, prénoms, nombre de créneaux, et les éventuels problèmes avec la case concernée.
+4. Cliquez sur **Publier**. La page suit la mise en ligne et confirme quand les mois sont publiés, en général en moins d’une minute.
 
-Un fichier qui contient une erreur ne peut pas être publié : la page indique quoi corriger dans Excel.
+Un fichier qui contient une erreur n’est pas envoyé (les autres le sont) : la page indique quoi corriger dans Excel. Les fichiers envoyés depuis la page sont enregistrés avec le mois en tête de leur nom (`2026-12 PLANNING DECEMBRE.xlsx`), pour que deux fichiers nommés pareil (« planning.xlsx ») ne s’écrasent pas.
 
 Aucun compte GitHub ni aucune clé n’est nécessaire pour déposer : c’est le **service de dépôt** (voir plus bas) qui détient l’accès au dépôt.
 
@@ -45,18 +45,21 @@ Déposez la version corrigée dans `plannings/`, sous le même nom ou un autre. 
 
 ## Ce que l’outil lit dans le fichier
 
-Le fichier doit garder la mise en forme habituelle :
+Formats acceptés : `.xlsx` (et `.xlsm`), ancien Excel `.xls`, LibreOffice `.ods`. Un fichier protégé par un mot de passe doit être enregistré sans protection avant d’être déposé.
 
-- un **titre** qui contient le mois et l’année, par exemple `PLG ACCUEIL OCTOBRE 2026` : c’est lui qui fixe le mois, pas le nom du fichier ;
-- des **lignes de jours** (`LUNDI 28`, `MARDI 29`, `JEUDI 1ER`…), une par semaine. Le planning peut commencer en fin de mois précédent et finir en début de mois suivant : ces jours restent dans le planning du mois ;
-- sous chaque ligne de jours, **une ligne par personne**, avec le prénom dans la colonne juste à gauche du premier jour ;
-- dans les cases, des **horaires** comme `8H-15H30`, `15H30-23H`, `8h - 15h` ou `08:00-12:00`. Deux créneaux dans une même case se séparent par `/` ou `+` (`8H-12H / 14H-18H`). Un horaire qui finit après minuit (`22H-6H`) se termine le lendemain.
+**Le mois.** Il est lu dans le titre de la feuille : `PLG ACCUEIL OCTOBRE 2026`, `Planning oct. 26`, `octobre 2026` saisi comme une date Excel… Si le titre ne l’indique pas, l’outil le cherche dans le nom de l’onglet, puis dans le nom du fichier (avec un avertissement). Sans année, celle-ci est déduite des jours de la semaine. Si le titre désigne un autre mois que celui qui occupe l’essentiel des jours, un avertissement le signale.
+
+**Les jours.** Une ligne de jours par semaine : `LUNDI 28`, `JEUDI 1ER`, `Lun. 5`, `MARDI 29/09`, `MERCREDI 30 SEPTEMBRE`, ou de vraies dates Excel. Le planning peut déborder sur le mois précédent et le suivant : ces jours restent dans le planning du mois. Une dernière semaine incomplète est acceptée. Une semaine absente est signalée (ses jours ne sont dans aucun agenda) ; une semaine en double ou dans le désordre est une erreur.
+
+**Les personnes.** Une ligne par personne sous chaque ligne de jours, le prénom dans la colonne juste à gauche du premier jour (ou un peu plus à gauche si une colonne vide est intercalée). Les annotations sont ignorées : `TOM (stagiaire)` et `TOM*` sont Tom. Une faute de frappe d’une lettre (`SYVAIN` pour `SYLVAIN`) est corrigée avec un avertissement, y compris quand elle concerne tout un mois et ressemble à une personne des mois précédents. Si ce sont réellement deux personnes, ajoutez une entrée dans `config/aliases.json`. Deux personnes portant le même prénom doivent être distinguées dans le fichier (`THOMAS B.` et `THOMAS L.`).
+
+**Les horaires.** `8H-15H30`, `15H30-23H`, `8h - 15h`, `8h à 15h`, `de 8h à 15h`, `08:00-12:00`, `8.30-12`, `8-15`. Plusieurs créneaux dans une case se séparent par `/`, `+` ou `et`. Un horaire qui finit après minuit (`22H-6H`) se termine le lendemain. Un texte en plus (`8H-12H FORMATION`) est conservé dans la description de l’événement. Une case fusionnée sur plusieurs jours vaut pour chacun d’eux. Des créneaux qui se chevauchent sont signalés.
 
 **Toute case sans horaire est un jour OFF** : case vide, `RH`, `MA`, `CP`, etc. Aucun événement n’est créé.
 
-Si une case contient des chiffres mais pas un horaire reconnu (par exemple `15H30_23H`), la journée est comptée OFF **et un avertissement est affiché** dans le résumé de l’Action, avec la case concernée, pour corriger le fichier.
+Si une case contient des chiffres mais pas un horaire reconnu (par exemple `15H30_23H`), la journée est comptée OFF **et un avertissement indique la case**, pour corriger le fichier.
 
-Une faute de frappe d’une lettre sur un prénom (par exemple `SYVAIN` au lieu de `SYLVAIN`) est corrigée automatiquement, avec un avertissement. Si ce sont en réalité deux personnes différentes, ajoutez la ligne correspondante dans `config/aliases.json` (voir plus bas).
+**Ce qui est ignoré**, comme à l’écran : les lignes, colonnes et onglets masqués. Un classeur qui contient plusieurs onglets de mois différents publie chacun de ces mois ; deux onglets pour le même mois sont une erreur.
 
 ## S’abonner plutôt que télécharger chaque mois
 
@@ -96,6 +99,8 @@ Après toute modification d’une variable : **Deploys** → **Trigger deploy** 
 - **Changer le mot de passe** : modifiez `MOT_DE_PASSE`, redéployez, communiquez le nouveau. Sur les appareils où l’ancien était mémorisé, la page redemande simplement le mot de passe.
 - **Si la page affiche « La clé GitHub du service de dépôt a expiré ou a été supprimée »** : créez une nouvelle clé GitHub avec les mêmes réglages (https://github.com/settings/personal-access-tokens/new), remplacez `GITHUB_TOKEN`, redéployez.
 - **En secours**, le dépôt direct sur GitHub (ci-dessous) fonctionne toujours, pour qui a accès au dépôt.
+- Le service accepte au plus 40 appels par minute et par adresse, et attend une seconde après chaque mauvais mot de passe : les essais en rafale sont freinés. Le mot de passe est comparé sans tenir compte des espaces autour.
+- `ORIGINE_AUTORISEE` (facultatif) : site(s) autorisé(s) à appeler le service, séparés par des virgules, si le site change d’adresse (domaine personnalisé).
 
 ## Configuration
 
@@ -104,7 +109,8 @@ Après toute modification d’une variable : **Deploys** → **Trigger deploy** 
   - `lieu` : lieu ajouté à chaque événement (vide par défaut) ;
   - `siteUrl` : adresse publique du site ;
   - `depot` : dépôt GitHub (`propriétaire/nom`) ;
-  - `serviceDepot` : adresse du service de dépôt utilisé par la page d’ajout.
+  - `serviceDepot` : adresse du service de dépôt utilisé par la page d’ajout ;
+  - `indiceMotDePasse` : indication affichée sous le champ du mot de passe (vide pour n’en afficher aucune).
 - `config/aliases.json` : correspondances de prénoms, par exemple `{ "SYLV": "SYLVAIN" }`. Une entrée vers lui-même (`{ "LEO": "LEO" }`) empêche tout rapprochement automatique avec un prénom proche.
 
 Après une modification de la configuration, retraitez tous les plannings (voir ci-dessus).

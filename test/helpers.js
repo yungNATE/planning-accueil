@@ -11,8 +11,11 @@ export const XLSX = /** @type {any} */ (XLSXModule).read ? XLSXModule : /** @typ
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const OCTOBER = path.join(ROOT, 'plannings', 'PLANNING_OCTOBRE_26.xlsx');
 
+/** Options de lecture utilisées par la publication et la page d'ajout */
+export const READ_OPTIONS = { cellNF: true, cellStyles: true };
+
 export function readOctober() {
-  return XLSX.read(readFileSync(OCTOBER), { type: 'buffer' });
+  return XLSX.read(readFileSync(OCTOBER), { type: 'buffer', ...READ_OPTIONS });
 }
 
 const WEEKDAYS = ['LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI', 'SAMEDI', 'DIMANCHE'];
@@ -53,8 +56,31 @@ export function toBuffer(/** @type {any} */ wb) {
 
 /** Aller-retour par le format .xlsx, comme un vrai fichier déposé. */
 export function roundTrip(/** @type {any} */ wb) {
-  return XLSX.read(toBuffer(wb), { type: 'buffer' });
+  return XLSX.read(toBuffer(wb), { type: 'buffer', ...READ_OPTIONS });
 }
+
+/**
+ * Classeur d'une ou plusieurs feuilles construites à partir de tableaux.
+ * @param {{ name?: string, rows: any[][], merges?: any[], hiddenRows?: number[], hidden?: boolean, cells?: Record<string, any> }[]} sheets
+ */
+export function workbookOf(sheets) {
+  const wb = XLSX.utils.book_new();
+  for (const [i, sheet] of sheets.entries()) {
+    const ws = XLSX.utils.aoa_to_sheet(sheet.rows);
+    if (sheet.merges) ws['!merges'] = sheet.merges;
+    if (sheet.hiddenRows) ws['!rows'] = sheet.hiddenRows.reduce((acc, r) => { acc[r] = { hidden: true }; return acc; }, []);
+    Object.assign(ws, sheet.cells ?? {});
+    XLSX.utils.book_append_sheet(wb, ws, sheet.name ?? `Feuil${i + 1}`);
+  }
+  wb.Workbook = { Sheets: sheets.map((sheet, i) => ({ name: sheet.name ?? `Feuil${i + 1}`, Hidden: sheet.hidden ? 1 : 0 })) };
+  return roundTrip(wb);
+}
+
+/** Libellés d'une semaine à partir d'un lundi */
+export const week = (/** @type {string} */ monday) => Array.from({ length: 7 }, (_, i) => dayLabel(addDays(monday, i)));
+
+/** Numéro de série Excel d'une date */
+export const serial = (/** @type {string} */ iso) => (Date.UTC(...(/** @type {[number, number, number]} */ (iso.split('-').map((n, i) => Number(n) - (i === 1 ? 1 : 0))))) - Date.UTC(1899, 11, 30)) / 86400000;
 
 /** n cases avec la même valeur */
 export const fill = (/** @type {number} */ n, /** @type {string} */ value) => Array.from({ length: n }, () => value);

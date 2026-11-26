@@ -8,9 +8,10 @@
  *   node src/process.js --all             tous les plannings du dossier plannings/
  *   node src/process.js --site-only       aucun planning, page et abonnements régénérés
  *
- * Chaque planning traité remplace entièrement son mois (data/<AAAA-MM>.json et public/ics/<AAAA-MM>/).
- * Les autres mois ne sont jamais réécrits. Les fichiers d'abonnement, le manifeste et la page sont
- * reconstruits à partir de data/, sans relire les anciens fichiers Excel.
+ * Chaque planning traité (un par onglet) remplace entièrement les données de son mois (data/<AAAA-MM>.json).
+ * Les données des autres mois ne sont jamais réécrites. Les agendas (mensuels et d'abonnement), le manifeste
+ * et les pages sont reconstruits à partir de data/, sans relire les anciens fichiers Excel : un mois
+ * inchangé redonne exactement les mêmes fichiers.
  */
 import {
   appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync,
@@ -19,7 +20,8 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as XLSXModule from 'xlsx';
-import { parsePlanning } from './parse-planning.js';
+import { parseWorkbook } from './parse-planning.js';
+import { nameKey } from './names.js';
 import { buildCalendar, employeeEvents } from './ics.js';
 import { renderIndex, renderUpload } from './site.js';
 import { capitalize, formatDateFr, monthLabel } from './util.js';
@@ -39,8 +41,16 @@ function sheetjsDir() {
   return dir;
 }
 
-/** @param {string} file */
-export const isPlanningFile = (file) => /\.xlsx$/i.test(file) && !path.basename(file).startsWith('~$');
+/** Formats lus : Excel récent (.xlsx, .xlsm), ancien Excel (.xls), LibreOffice (.ods). */
+export const isPlanningFile = (/** @type {string} */ file) => /\.(xlsx|xlsm|xls|ods)$/i.test(file) && !path.basename(file).startsWith('~$');
+
+/** Erreur de lecture SheetJS → message compréhensible */
+function readErrorMessage(/** @type {Error} */ error) {
+  if (/password/i.test(error.message)) {
+    return 'Le fichier est protégé par un mot de passe : enregistrez-en une copie sans protection (Fichier > Informations > Protéger le classeur), puis déposez cette copie.';
+  }
+  return `Le fichier n’a pas pu être lu comme un classeur (${error.message}). Ouvrez-le dans Excel, enregistrez-le au format .xlsx, puis déposez-le à nouveau.`;
+}
 
 /** @param {string} file @param {any} fallback */
 function readJson(file, fallback) {
@@ -55,7 +65,7 @@ function writeJson(file, value) {
 }
 
 /** @param {string} root @param {string[]} args */
-const git = (root, args) => execFileSync('git', args, { cwd: root }).toString('utf8');
+const git = (root, args) => execFileSync('git', args, { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString('utf8');
 
 /** @param {string} root @param {string | undefined} sha */
 function commitExists(root, sha) {
@@ -115,7 +125,18 @@ export function runPending(options) {
 export function allPlannings(root) {
   const dir = path.join(root, 'plannings');
   if (!existsSync(dir)) return [];
-  return readdirSync(dir).filter(isPlanningFile).sort().map((f) => path.join('plannings', f));
+  const files = readdirSync(dir).filter(isPlanningFile).sort().map((f) => path.join('plannings', f));
+  // Ordre de dépôt (date du dernier commit) : en cas de doublon de mois, le fichier le plus récent l'emporte
+  /** @param {string} f */
+  const committedAt = (f) => {
+    try {
+      return Number(git(root, ['log', '-1', '--format=%ct', '--', f]).trim()) || Infinity;
+    } catch {
+      return Infinity;
+    }
+  };
+  const times = new Map(files.map((f) => [f, committedAt(f)]));
+  return files.sort((a, b) => (times.get(a) ?? 0) - (times.get(b) ?? 0));
 }
 
 /**
@@ -141,77 +162,122 @@ export function runProcess(options) {
   /** @type {Report} */
   const report = { files: [], overlaps: [], processedMonths: [], failed: false };
 
-  /* 1. Plannings déposés : un mois remplacé par fichier */
+  /** @returns {any[]} données de tous les mois publiés ; un fichier illisible est signalé et ignoré */
+  const loadData = () => (existsSync(dataDir) ? readdirSync(dataDir) : [])
+    .filter((f) => /^\d{4}-\d{2}\.json$/.test(f))
+    .flatMap((f) => {
+      try {
+        const d = readJson(path.join(dataDir, f), null);
+        if (!d?.month || !Array.isArray(d.days) || !Array.isArray(d.employees)) throw new Error('contenu inattendu');
+        return [d];
+      } catch (error) {
+        report.files.push({
+          file: `data/${f}`, month: f.slice(0, 7), start: '', end: '', employees: [], warnings: [],
+          errors: [{ message: `Données du mois illisibles (${/** @type {Error} */ (error).message}) : retraitez le planning de ce mois.` }],
+        });
+        return [];
+      }
+    });
+
+  // Personnes déjà publiées : une faute de frappe sur tout un mois est rattachée à la bonne personne
+  /** @type {Map<string, string>} */
+  const known = new Map();
+  for (const d of loadData()) for (const e of d.employees) known.set(e.key ?? nameKey(e.name), e.name);
+  report.files = [];
+
+  /* 1. Plannings déposés : chaque planning (un par onglet) remplace entièrement son mois */
   for (const file of files) {
     let abs = path.resolve(root, file);
     if (!existsSync(abs) && existsSync(path.join(root, 'plannings', file))) abs = path.join(root, 'plannings', file);
     const rel = path.relative(root, abs);
-    /** @type {FileReport} */
-    const entry = { file: rel, month: '', start: '', end: '', employees: [], warnings: [], errors: [] };
-    report.files.push(entry);
+    /** @param {Partial<FileReport>} extra */
+    const entryFor = (extra = {}) => {
+      /** @type {FileReport} */
+      const entry = { file: rel, month: '', start: '', end: '', employees: [], warnings: [], errors: [], ...extra };
+      report.files.push(entry);
+      return entry;
+    };
 
     if (!existsSync(abs)) {
-      entry.errors.push({ message: 'Fichier introuvable dans le dépôt.' });
+      entryFor({ errors: [{ message: 'Fichier introuvable dans le dépôt.' }] });
       continue;
     }
     let workbook;
     try {
-      workbook = XLSX.read(readFileSync(abs), { type: 'buffer' });
+      workbook = XLSX.read(readFileSync(abs), { type: 'buffer', cellNF: true, cellStyles: true });
     } catch (error) {
-      entry.errors.push({ message: `Le fichier n’a pas pu être lu comme un classeur Excel (${/** @type {Error} */ (error).message}).` });
+      entryFor({ errors: [{ message: readErrorMessage(/** @type {Error} */ (error)) }] });
       continue;
     }
-    const parsed = parsePlanning(workbook, { source: path.basename(rel), aliases });
-    Object.assign(entry, {
-      month: parsed.month,
-      start: parsed.start,
-      end: parsed.end,
-      employees: parsed.employees.map((e) => ({ name: e.name, slotCount: e.slotCount })),
+    const { plannings, errors } = parseWorkbook(workbook, {
+      source: path.basename(rel),
+      aliases,
+      knownNames: [...known.entries()].map(([key, name]) => ({ key, name })),
+      now: options.now,
     });
-    entry.warnings.push(...parsed.warnings);
-    entry.errors.push(...parsed.errors);
-    if (!parsed.ok) continue;
+    if (errors.length) entryFor({ errors });
 
-    const label = monthLabel(parsed.month);
-    const dataFile = path.join(dataDir, `${parsed.month}.json`);
-    const previous = readJson(dataFile, null);
-    if (previous && previous.source !== parsed.source) {
-      entry.warnings.push({ message: `Ce fichier remplace le planning ${label} publié précédemment depuis « ${previous.source} ».` });
-    }
-    writeJson(dataFile, {
-      version: 1,
-      month: parsed.month,
-      label,
-      title: parsed.title,
-      source: parsed.source,
-      processedAt: now,
-      start: parsed.start,
-      end: parsed.end,
-      days: parsed.days,
-      employees: parsed.employees.map(({ name, slug, slotCount, days }) => ({ name, slug, slotCount, days })),
-      warnings: parsed.warnings,
-    });
+    for (const parsed of plannings) {
+      const entry = entryFor({
+        month: parsed.month,
+        start: parsed.start,
+        end: parsed.end,
+        employees: parsed.employees.map((e) => ({ name: e.name, slotCount: e.slotCount })),
+        warnings: [...parsed.warnings],
+        errors: [...parsed.errors],
+      });
+      if (plannings.length > 1) entry.file = `${rel} (onglet « ${parsed.sheet} »)`;
+      if (!parsed.ok) continue;
 
-    const monthDir = path.join(icsDir, parsed.month);
-    rmSync(monthDir, { recursive: true, force: true });
-    mkdirSync(monthDir, { recursive: true });
-    for (const employee of parsed.employees) {
-      if (!employee.slotCount) continue;
-      const events = employeeEvents(employee, { title: settings.titre, location: settings.lieu, source: parsed.source, stamp: now });
-      writeFileSync(
-        path.join(monthDir, `${employee.slug}.ics`),
-        buildCalendar({ name: `${settings.titre} – ${employee.name} – ${capitalize(label)}`, events }),
-      );
+      const label = monthLabel(parsed.month);
+      const dataFile = path.join(dataDir, `${parsed.month}.json`);
+      let previous = null;
+      try { previous = readJson(dataFile, null); } catch { /* données illisibles : remplacées */ }
+      if (previous && previous.source !== parsed.source) {
+        entry.warnings.push({ message: `Ce fichier remplace le planning ${label} publié précédemment depuis « ${previous.source} ».` });
+      }
+      writeJson(dataFile, {
+        version: 1,
+        month: parsed.month,
+        label,
+        title: parsed.title,
+        source: parsed.source,
+        sheet: parsed.sheet,
+        processedAt: now,
+        start: parsed.start,
+        end: parsed.end,
+        days: parsed.days,
+        employees: parsed.employees.map(({ name, key, slug, slotCount, days }) => ({ name, key, slug, slotCount, days })),
+        warnings: parsed.warnings,
+      });
+      for (const e of parsed.employees) known.set(e.key, e.name);
+      report.processedMonths.push(parsed.month);
     }
-    report.processedMonths.push(parsed.month);
   }
 
   /* 2. Données de tous les mois, dans l'ordre de traitement */
-  const all = (existsSync(dataDir) ? readdirSync(dataDir) : [])
-    .filter((f) => /^\d{4}-\d{2}\.json$/.test(f))
-    .map((f) => readJson(path.join(dataDir, f), null))
-    .filter(Boolean)
-    .sort((a, b) => a.processedAt.localeCompare(b.processedAt) || a.month.localeCompare(b.month));
+  const all = loadData().sort((a, b) => a.processedAt.localeCompare(b.processedAt) || a.month.localeCompare(b.month));
+
+  /* 3. Agendas mensuels, régénérés depuis data/ : identiques octet pour octet pour les mois inchangés,
+        et reconstitués s'ils ont été effacés par erreur */
+  mkdirSync(icsDir, { recursive: true });
+  const months = new Set(all.map((d) => d.month));
+  for (const entry of readdirSync(icsDir, { withFileTypes: true })) {
+    if (entry.isDirectory() && /^\d{4}-\d{2}$/.test(entry.name) && !months.has(entry.name)) rmSync(path.join(icsDir, entry.name), { recursive: true, force: true });
+  }
+  for (const d of all) {
+    const monthDir = path.join(icsDir, d.month);
+    rmSync(monthDir, { recursive: true, force: true });
+    mkdirSync(monthDir, { recursive: true });
+    for (const employee of d.employees) {
+      if (!employee.slotCount) continue;
+      const events = employeeEvents(employee, { title: settings.titre, location: settings.lieu, source: d.source, stamp: d.processedAt });
+      writeFileSync(
+        path.join(monthDir, `${employee.slug}.ics`),
+        buildCalendar({ name: `${settings.titre} – ${employee.name} – ${capitalize(d.label ?? monthLabel(d.month))}`, events }),
+      );
+    }
+  }
 
   // Chevauchements (anormaux : les plannings sont découpés en semaines complètes)
   for (let i = 0; i < all.length; i++) {

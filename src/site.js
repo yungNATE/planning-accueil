@@ -63,7 +63,7 @@ export function renderIndex(manifest, settings = {}) {
     ? new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'long', timeStyle: 'short' }).format(new Date(manifest.updatedAt))
     : '';
 
-  const monthButtons = manifest.months.map((m, i) => {
+  const monthButton = (/** @type {ManifestMonth} */ m, /** @type {number} */ i) => {
     const people = m.employees.length;
     return `
         <li>
@@ -76,7 +76,18 @@ export function renderIndex(manifest, settings = {}) {
             ${weekGrid(m)}
           </button>
         </li>`;
-  }).join('');
+  };
+  // Les six mois les plus récents en évidence, les autres repliés
+  const RECENT = 6;
+  const monthButtons = manifest.months.slice(0, RECENT).map(monthButton).join('');
+  const olderMonths = manifest.months.length > RECENT
+    ? `
+      <details class="older">
+        <summary>Mois précédents (${manifest.months.length - RECENT})</summary>
+        <ul class="months" role="list">${manifest.months.slice(RECENT).map((m, i) => monthButton(m, i + RECENT)).join('')}
+        </ul>
+      </details>`
+    : '';
 
   const dialogs = manifest.months.map((m) => {
     const id = `mois-${m.month}`;
@@ -159,7 +170,7 @@ export function renderIndex(manifest, settings = {}) {
   <meta name="color-scheme" content="light dark">
   <title>Plannings de l’accueil</title>
   <link rel="icon" href="${FAVICON}">
-  <script>document.documentElement.classList.replace('no-js', 'js');</script>
+  <script>if (window.HTMLDialogElement && typeof HTMLDialogElement.prototype.showModal === 'function') document.documentElement.classList.replace('no-js', 'js');</script>
   <link rel="stylesheet" href="assets/styles.css">
   <script type="module" src="assets/app.js"></script>
 </head>
@@ -174,15 +185,15 @@ export function renderIndex(manifest, settings = {}) {
       <h2 id="titre-mois" class="section-title">Mois disponibles</h2>
       ${empty}
       <ul class="months" role="list">${monthButtons}
-      </ul>
-      <noscript>
+      </ul>${olderMonths}
+      <div class="fallback-wrap">
         <table class="fallback">
           <caption>Tous les agendas</caption>
           <thead><tr><th scope="col">Mois</th><th scope="col">Nom</th><th scope="col">Agenda du mois</th><th scope="col">Abonnement</th></tr></thead>
           <tbody>${fallbackRows}
           </tbody>
         </table>
-      </noscript>
+      </div>
     </section>
 
     <footer class="footer">
@@ -201,7 +212,7 @@ ${dialogs}
  * puis l'envoie au service de dépôt (fonction Netlify) qui l'enregistre dans le dépôt GitHub.
  * La personne qui dépose n'a qu'un mot de passe à saisir.
  * @param {Manifest} manifest
- * @param {{ serviceDepot?: string, depot?: string }} settings
+ * @param {{ serviceDepot?: string, depot?: string, indiceMotDePasse?: string }} settings
  * @param {Record<string, string>} aliases
  */
 export function renderUpload(manifest, settings = {}, aliases = {}) {
@@ -216,7 +227,7 @@ export function renderUpload(manifest, settings = {}, aliases = {}) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <meta name="color-scheme" content="light dark">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ${esc(serviceOrigin)}; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ${esc(serviceOrigin)}; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <title>Ajouter un planning – Plannings de l’accueil</title>
   <link rel="icon" href="${FAVICON}">
@@ -228,7 +239,7 @@ export function renderUpload(manifest, settings = {}, aliases = {}) {
     <p class="back"><a href="./">Retour aux plannings</a></p>
     <header class="intro">
       <h1>Ajouter un planning</h1>
-      <p>Choisissez le fichier Excel du mois : il est vérifié ici, puis mis en ligne. Les agendas de chacun sont prêts dans la minute qui suit.</p>
+      <p>Choisissez le fichier Excel du mois (ou plusieurs) : il est vérifié ici, puis mis en ligne. Les agendas de chacun sont prêts dans la minute qui suit.</p>
     </header>
 
     <noscript><p class="notice notice--error">Cette page a besoin de JavaScript pour fonctionner.</p></noscript>
@@ -240,9 +251,10 @@ export function renderUpload(manifest, settings = {}, aliases = {}) {
         <input type="text" name="identifiant" value="plannings-accueil" autocomplete="username" hidden>
         <label for="cle">Mot de passe de dépôt</label>
         <div class="field-row">
-          <input id="cle" name="cle" type="password" autocomplete="current-password" spellcheck="false" required aria-describedby="cle-erreur">
+          <input id="cle" name="cle" type="password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" required aria-describedby="${settings.indiceMotDePasse ? 'cle-indice ' : ''}cle-erreur">
           <button type="submit" class="button-primary">Continuer</button>
         </div>
+        ${settings.indiceMotDePasse ? `<p class="field-hint" id="cle-indice">Indice : ${esc(settings.indiceMotDePasse)}</p>` : ''}
         <p class="checkbox">
           <input id="memoriser" name="memoriser" type="checkbox" checked>
           <label for="memoriser">Mémoriser sur cet appareil</label>
@@ -252,15 +264,15 @@ export function renderUpload(manifest, settings = {}, aliases = {}) {
     </section>
 
     <section class="step" id="etape-fichier" aria-labelledby="titre-fichier" hidden>
-      <h2 id="titre-fichier">Fichier du planning</h2>
+      <h2 id="titre-fichier">Fichiers des plannings</h2>
       <label class="dropzone" data-dropzone>
-        <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-file>
-        <span class="dropzone__title">Choisir le fichier Excel</span>
-        <span class="dropzone__hint">ou le glisser ici (.xlsx)</span>
+        <input type="file" multiple accept=".xlsx,.xlsm,.xls,.ods,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/vnd.oasis.opendocument.spreadsheet" data-file>
+        <span class="dropzone__title">Choisir le ou les fichiers Excel</span>
+        <span class="dropzone__hint">ou les glisser ici (.xlsx, .xls, .ods)</span>
       </label>
       <div class="preview" data-preview hidden></div>
       <p class="actions" data-publish-row hidden>
-        <button type="button" class="button-primary" data-publish>Publier ce planning</button>
+        <button type="button" class="button-primary" data-publish>Publier</button>
       </p>
       <div class="status" role="status" data-status></div>
       <p class="token-info" data-token-info hidden>Mot de passe mémorisé sur cet appareil. <button type="button" class="link-button" data-forget>Oublier le mot de passe</button></p>

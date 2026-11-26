@@ -3,5 +3,6 @@
   "lieu": "",
   "siteUrl": "https://yungnate.github.io/planning-accueil/",
   "depot": "yungNATE/planning-accueil",
-  "serviceDepot": "https://planning-accueil-depot.netlify.app"
+  "serviceDepot": "https://planning-accueil-depot.netlify.app",
+  "indiceMotDePasse": "mdp wifi versailles"
 }

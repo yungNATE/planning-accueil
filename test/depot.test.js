@@ -2,7 +2,7 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import handler, { config } from '../depot/netlify/functions/depot.mts';
+import handler, { config, storedName } from '../depot/netlify/functions/depot.mts';
 import { OCTOBER } from './helpers.js';
 
 const SERVICE = 'https://planning-accueil-depot.netlify.app';
@@ -34,9 +34,9 @@ beforeEach(() => {
 afterEach(() => { globalThis.fetch = realFetch; });
 
 /** @param {string} route @param {object} body */
-const post = (route, body) => handler(new Request(`${SERVICE}/api/${route}`, {
+const post = (route, body, origin = 'https://yungnate.github.io') => handler(new Request(`${SERVICE}/api/${route}`, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json', Origin: 'https://yungnate.github.io' },
+  headers: { 'Content-Type': 'application/json', Origin: origin },
   body: JSON.stringify(body),
 }));
 
@@ -75,7 +75,7 @@ test('dépôt d’un nouveau fichier : enregistré dans plannings/ avec la clé 
     motDePasse: 'Jardin Lune 42', nom: 'PLANNING NOVEMBRE 26.xlsx', contenu: xlsx.toString('base64'), mois: 'novembre 2026',
   });
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { sha: 'a'.repeat(40) });
+  assert.deepEqual(await res.json(), { sha: 'a'.repeat(40), fichier: 'PLANNING NOVEMBRE 26.xlsx' });
   const put = calls.find((c) => c.method === 'PUT');
   assert.equal(put.url, 'https://api.github.com/repos/yungNATE/planning-accueil/contents/plannings/PLANNING%20NOVEMBRE%2026.xlsx');
   assert.equal(put.auth, 'Bearer github_pat_service');
@@ -95,8 +95,8 @@ test('remplacement d’un fichier existant : le sha actuel est transmis', async 
 
 test('fichiers refusés avant tout envoi à GitHub', async () => {
   const pass = { motDePasse: 'Jardin Lune 42' };
-  assert.equal((await post('deposer', { ...pass, nom: '../config/settings.xlsx', contenu: xlsx.toString('base64') })).status, 400);
-  assert.equal((await post('deposer', { ...pass, nom: 'planning.xls', contenu: xlsx.toString('base64') })).status, 400);
+  assert.equal((await post('deposer', { ...pass, nom: 'planning.pdf', contenu: xlsx.toString('base64') })).status, 400);
+  assert.equal((await post('deposer', { ...pass, nom: 'planning', contenu: xlsx.toString('base64') })).status, 400);
   assert.equal((await post('deposer', { ...pass, nom: 'planning.xlsx', contenu: Buffer.from('pas un zip').toString('base64') })).status, 400);
   assert.equal((await post('deposer', { ...pass, nom: 'planning.xlsx', contenu: '' })).status, 400);
   assert.equal(calls.length, 0);
@@ -136,4 +136,65 @@ test('exécution annulée et remplacée : le suivi passe à l’exécution suiva
   latest = { status: 'completed', conclusion: 'success', html_url: 'https://github.com/run/2' };
   assert.deepEqual(await etat(), { etat: 'publie', lien: 'https://github.com/run/2' });
   assert.match(calls.at(-1).url, /actions\/workflows\/publier\.yml\/runs\?branch=main/);
+});
+
+test('noms de fichiers : préfixe du mois, caractères spéciaux, chemins, formats', () => {
+  assert.equal(storedName('PLANNING OCTOBRE 26.xlsx', ['2026-10']), '2026-10 PLANNING OCTOBRE 26.xlsx');
+  assert.equal(storedName('planning n°3 & co.XLSX', ['2026-11', '2026-10']), '2026-10+2026-11 planning n-3 - co.xlsx');
+  assert.equal(storedName('../../config/settings.xlsx', []), 'settings.xlsx');
+  assert.equal(storedName('2026-10 planning.xlsx', ['2026-10']), '2026-10 planning.xlsx');
+  assert.equal(storedName('ancien.xls', []), 'ancien.xls');
+  assert.equal(storedName('libre.ods', []), 'libre.ods');
+  assert.equal(storedName('a.pdf', []), null);
+});
+
+test('dépôt : nom préfixé par le mois, ancien format .xls accepté', async () => {
+  github = (url, init) => (init.method === 'PUT' ? Response.json({ commit: { sha: 'a'.repeat(40) } }, { status: 201 }) : Response.json({}, { status: 404 }));
+  const ole = Buffer.concat([Buffer.from('d0cf11e0a1b11ae1', 'hex'), Buffer.alloc(100)]);
+  const res = await post('deposer', { motDePasse: 'Jardin Lune 42', nom: 'planning.xls', contenu: ole.toString('base64'), moisCles: ['2026-12'] });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).fichier, '2026-12 planning.xls');
+  assert.match(calls.find((c) => c.method === 'PUT').url, /plannings\/2026-12%20planning\.xls$/);
+});
+
+test('mot de passe saisi avec des espaces autour : accepté', async () => {
+  assert.equal((await post('verifier', { motDePasse: '  Jardin Lune 42 ' })).status, 200);
+});
+
+test('plusieurs sites autorisés : l’origine de la requête est renvoyée si elle est autorisée', async () => {
+  process.env.ORIGINE_AUTORISEE = 'https://yungnate.github.io, https://plannings.exemple.fr';
+  const res = await post('verifier', { motDePasse: 'Jardin Lune 42' }, 'https://plannings.exemple.fr');
+  assert.equal(res.headers.get('access-control-allow-origin'), 'https://plannings.exemple.fr');
+  const other = await post('verifier', { motDePasse: 'Jardin Lune 42' }, 'https://pirate.exemple');
+  assert.equal(other.headers.get('access-control-allow-origin'), 'https://yungnate.github.io');
+});
+
+test('dépôts simultanés du même fichier : nouvel essai automatique', async () => {
+  let puts = 0;
+  github = (url, init) => {
+    if (init.method !== 'PUT') return Response.json({ sha: `version-${puts}` });
+    puts += 1;
+    return puts === 1 ? Response.json({ message: 'conflict' }, { status: 409 }) : Response.json({ commit: { sha: 'f'.repeat(40) } });
+  };
+  const res = await post('deposer', { motDePasse: 'Jardin Lune 42', nom: 'planning.xlsx', contenu: xlsx.toString('base64') });
+  assert.equal(res.status, 200);
+  assert.equal(puts, 2);
+  assert.equal(calls.filter((c) => c.method === 'PUT').at(-1).body.sha, 'version-1');
+});
+
+test('publication en file d’attente : état « file »', async () => {
+  github = () => Response.json({ workflow_runs: [{ status: 'queued', conclusion: null, html_url: 'https://github.com/run' }] });
+  const res = await post('suivi', { motDePasse: 'Jardin Lune 42', sha: '1'.repeat(40) });
+  assert.equal((await res.json()).etat, 'file');
+});
+
+test('GitHub qui ne répond pas : message réseau, pas de plantage', async () => {
+  github = () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError'); };
+  const res = await post('deposer', { motDePasse: 'Jardin Lune 42', nom: 'planning.xlsx', contenu: xlsx.toString('base64') });
+  assert.equal(res.status, 502);
+  assert.equal((await res.json()).erreur, 'reseau');
+});
+
+test('limitation des appels en rafale déclarée pour Netlify', () => {
+  assert.deepEqual(config.rateLimit, { windowLimit: 40, windowSize: 60, aggregateBy: ['ip', 'domain'] });
 });

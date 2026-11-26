@@ -10,21 +10,25 @@
 //   DEPOT              facultatif, « propriétaire/dépôt » (défaut : yungNATE/planning-accueil)
 //   BRANCHE            facultatif (défaut : main)
 //   WORKFLOW           facultatif, fichier du workflow de publication (défaut : publier.yml)
-//   ORIGINE_AUTORISEE  facultatif, site autorisé à appeler le service (défaut : https://yungnate.github.io)
+//   ORIGINE_AUTORISEE  facultatif, site(s) autorisé(s) à appeler le service, séparés par des virgules
+//                      (défaut : https://yungnate.github.io)
 //
 // Routes (POST, JSON) :
 //   /api/verifier  { motDePasse }                          → { ok: true }
-//   /api/deposer   { motDePasse, nom, contenu, mois? }     → { sha }      contenu : fichier encodé en base64
-//   /api/suivi     { motDePasse, sha }                     → { etat: attente | en-cours | publie | echec, lien? }
+//   /api/deposer   { motDePasse, nom, contenu, mois?, moisCles? }  → { sha, fichier }   contenu : fichier en base64
+//   /api/suivi     { motDePasse, sha }                     → { etat: attente | file | en-cours | publie | echec, lien? }
 
 import type { Config } from "@netlify/functions";
 import { createHash, timingSafeEqual } from "node:crypto";
 
 const MAX_BYTES = 4 * 1024 * 1024; // limite des fonctions Netlify : 6 Mo encodés en base64
 const FAILED_PASSWORD_DELAY_MS = 1000;
+const GITHUB_TIMEOUT_MS = 20_000;
 const GITHUB_API = "https://api.github.com";
+/** Formats acceptés : Excel récent (.xlsx, .xlsm), ancien Excel (.xls), LibreOffice (.ods) */
+const EXTENSION_RE = /\.(xlsx|xlsm|xls|ods)$/i;
 
-type Settings = { token: string; password: string; repo: string; branch: string; origin: string; workflow: string };
+type Settings = { token: string; password: string; repo: string; branch: string; origins: string[]; origin: string; workflow: string };
 type Run = { status: string; conclusion: string | null; html_url: string };
 type Body = Record<string, unknown>;
 
@@ -33,14 +37,17 @@ function env(key: string, fallback = ""): string {
   return netlify?.env.get(key) ?? process.env[key] ?? fallback;
 }
 
-function settings(): Settings {
+function settings(req: Request): Settings {
+  const origins = env("ORIGINE_AUTORISEE", "https://yungnate.github.io").split(",").map((o) => o.trim().replace(/\/+$/, "")).filter(Boolean);
+  const requested = req.headers.get("origin") ?? "";
   return {
-    token: env("GITHUB_TOKEN"),
+    token: env("GITHUB_TOKEN").trim(),
     password: env("MOT_DE_PASSE"),
-    repo: env("DEPOT", "yungNATE/planning-accueil"),
-    branch: env("BRANCHE", "main"),
-    origin: env("ORIGINE_AUTORISEE", "https://yungnate.github.io"),
-    workflow: env("WORKFLOW", "publier.yml"),
+    repo: env("DEPOT", "yungNATE/planning-accueil").trim(),
+    branch: env("BRANCHE", "main").trim(),
+    origins,
+    origin: origins.includes(requested) ? requested : origins[0] ?? "",
+    workflow: env("WORKFLOW", "publier.yml").trim(),
   };
 }
 
@@ -62,11 +69,34 @@ function reply(status: number, body: unknown, origin: string): Response {
 
 const fail = (status: number, erreur: string, message: string, origin: string) => reply(status, { erreur, message }, origin);
 
+/** Comparaison en temps constant ; espaces autour ignorés (claviers de téléphone, copier-coller). */
 function samePassword(given: unknown, expected: string): boolean {
-  if (typeof given !== "string" || !expected) return false;
-  const a = createHash("sha256").update(given.normalize("NFC")).digest();
-  const b = createHash("sha256").update(expected.normalize("NFC")).digest();
+  if (typeof given !== "string" || !expected.trim()) return false;
+  const a = createHash("sha256").update(given.trim().normalize("NFC")).digest();
+  const b = createHash("sha256").update(expected.trim().normalize("NFC")).digest();
   return timingSafeEqual(a, b);
+}
+
+/**
+ * Nom de fichier sûr, préfixé par le ou les mois (« 2026-10 PLANNING OCTOBRE.xlsx ») :
+ * deux plannings envoyés sous le même nom générique (« planning.xlsx ») ne s'écrasent pas.
+ */
+export function storedName(raw: unknown, monthKeys: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const base = raw.normalize("NFC").split(/[\\/]/).pop()?.trim() ?? "";
+  const ext = EXTENSION_RE.exec(base);
+  if (!ext) return null;
+  let stem = base
+    .slice(0, base.length - ext[0].length)
+    .replace(/[^\p{L}\p{N} _().,'’+-]+/gu, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^[\s.+-]+|[\s.+-]+$/g, "")
+    .slice(0, 80)
+    .trim() || "planning";
+  const keys = Array.isArray(monthKeys) ? monthKeys.filter((k): k is string => typeof k === "string" && /^\d{4}-\d{2}$/.test(k)).slice(0, 12) : [];
+  const prefix = [...new Set(keys)].sort().join("+");
+  if (prefix && !stem.startsWith(prefix)) stem = `${prefix} ${stem}`;
+  return `${stem}${ext[0].toLowerCase()}`;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -74,6 +104,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 function github(s: Settings, path: string, init: RequestInit = {}): Promise<Response> {
   return fetch(`${GITHUB_API}${path}`, {
     ...init,
+    signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
     headers: {
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
@@ -99,35 +130,40 @@ function githubFailure(status: number, origin: string): Response {
 }
 
 async function deposer(body: Body, s: Settings): Promise<Response> {
-  const name = typeof body.nom === "string" ? body.nom.normalize("NFC").trim() : "";
-  if (!/^[\p{L}\p{N}][\p{L}\p{N} _().,'’-]{0,99}\.xlsx$/iu.test(name)) {
-    return fail(400, "nom", "Nom de fichier refusé : choisissez un fichier .xlsx dont le nom ne contient que des lettres, chiffres, espaces et tirets.", s.origin);
+  const name = storedName(body.nom, body.moisCles);
+  if (!name) {
+    return fail(400, "nom", "Format refusé : choisissez un fichier Excel (.xlsx, .xls) ou LibreOffice (.ods).", s.origin);
   }
   const bytes = typeof body.contenu === "string" ? Buffer.from(body.contenu, "base64") : Buffer.alloc(0);
   if (bytes.length === 0) return fail(400, "contenu", "Le fichier est vide.", s.origin);
   if (bytes.length > MAX_BYTES) return fail(413, "taille", "Le fichier dépasse 4 Mo : ce n’est sans doute pas un planning.", s.origin);
-  if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
-    return fail(400, "format", "Ce fichier n’est pas un classeur Excel (.xlsx).", s.origin);
-  }
-  const label = typeof body.mois === "string" && /^[\p{L}\p{N} ]{3,40}$/u.test(body.mois) ? body.mois : name;
+  const zip = bytes[0] === 0x50 && bytes[1] === 0x4b;
+  const ole = bytes.subarray(0, 4).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0]));
+  if (!zip && !ole) return fail(400, "format", "Ce fichier n’est pas un classeur Excel ou LibreOffice.", s.origin);
+  const label = typeof body.mois === "string" && /^[\p{L}\p{N} ,]{3,80}$/u.test(body.mois) ? body.mois : name;
   const path = `/repos/${s.repo}/contents/plannings/${encodeURIComponent(name)}`;
 
-  const existing = await github(s, `${path}?ref=${encodeURIComponent(s.branch)}`);
-  if (!existing.ok && existing.status !== 404) return githubFailure(existing.status, s.origin);
-  const sha = existing.ok ? ((await existing.json()) as { sha?: string }).sha : undefined;
-
-  const saved = await github(s, path, {
-    method: "PUT",
-    body: JSON.stringify({
-      message: `Planning ${label} déposé depuis le site`,
-      content: bytes.toString("base64"),
-      branch: s.branch,
-      ...(sha ? { sha } : {}),
-    }),
-  });
-  if (!saved.ok) return githubFailure(saved.status, s.origin);
-  const commit = ((await saved.json()) as { commit?: { sha?: string } }).commit;
-  return reply(200, { sha: commit?.sha ?? "" }, s.origin);
+  // Deux essais : si le fichier a changé entre la lecture et l'écriture (dépôts simultanés), on relit et on recommence
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const existing = await github(s, `${path}?ref=${encodeURIComponent(s.branch)}`);
+    if (!existing.ok && existing.status !== 404) return githubFailure(existing.status, s.origin);
+    const sha = existing.ok ? ((await existing.json()) as { sha?: string }).sha : undefined;
+    const saved = await github(s, path, {
+      method: "PUT",
+      body: JSON.stringify({
+        message: `Planning ${label} déposé depuis le site`,
+        content: bytes.toString("base64"),
+        branch: s.branch,
+        ...(sha ? { sha } : {}),
+      }),
+    });
+    if (saved.ok) {
+      const commit = ((await saved.json()) as { commit?: { sha?: string } }).commit;
+      return reply(200, { sha: commit?.sha ?? "", fichier: name }, s.origin);
+    }
+    if (!(saved.status === 409 || saved.status === 422) || attempt === 2) return githubFailure(saved.status, s.origin);
+  }
+  return githubFailure(409, s.origin);
 }
 
 async function runs(s: Settings, query: string): Promise<Run[] | Response> {
@@ -150,12 +186,13 @@ async function suivi(body: Body, s: Settings): Promise<Response> {
     if (latest[0]) run = latest[0];
     if (run.conclusion === "cancelled") return reply(200, { etat: "en-cours", lien: run.html_url }, s.origin);
   }
+  if (["queued", "pending", "waiting", "requested"].includes(run.status)) return reply(200, { etat: "file", lien: run.html_url }, s.origin);
   if (run.status !== "completed") return reply(200, { etat: "en-cours", lien: run.html_url }, s.origin);
   return reply(200, { etat: run.conclusion === "success" ? "publie" : "echec", lien: run.html_url }, s.origin);
 }
 
 export default async (req: Request): Promise<Response> => {
-  const s = settings();
+  const s = settings(req);
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: headers(s.origin) });
   if (req.method !== "POST") return fail(405, "methode", "Méthode non autorisée.", s.origin);
   if (!s.password || !s.token) {
@@ -188,4 +225,6 @@ export default async (req: Request): Promise<Response> => {
 export const config: Config = {
   path: ["/api/verifier", "/api/deposer", "/api/suivi"],
   method: ["POST", "OPTIONS"],
+  // Limite les essais de mot de passe en rafale ; un dépôt suivi jusqu'au bout fait une quinzaine d'appels
+  rateLimit: { windowLimit: 40, windowSize: 60, aggregateBy: ["ip", "domain"] },
 };

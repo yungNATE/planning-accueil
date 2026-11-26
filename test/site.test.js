@@ -7,19 +7,23 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { runProcess } from '../src/process.js';
-import { renderUpload } from '../src/site.js';
+import { renderIndex, renderUpload } from '../src/site.js';
 import { OCTOBER, ROOT } from './helpers.js';
 
-test('la page d’ajout connaît le service de dépôt, les mois publiés et ne se connecte qu’à ce service', () => {
+test('la page d’ajout connaît le service de dépôt, les mois publiés, et ne se connecte qu’au site et à ce service', () => {
   const html = renderUpload(
     { updatedAt: '', subscriptions: [], months: [{ month: '2026-10' }] },
-    { serviceDepot: 'https://planning-accueil-depot.netlify.app/', depot: 'yungNATE/planning-accueil' },
+    { serviceDepot: 'https://planning-accueil-depot.netlify.app/', depot: 'yungNATE/planning-accueil', indiceMotDePasse: 'mdp wifi versailles' },
     { SYVAIN: 'SYLVAIN' },
   );
+  assert.match(html, /<p class="field-hint" id="cle-indice">Indice : mdp wifi versailles<\/p>/);
+  assert.match(html, /aria-describedby="cle-indice cle-erreur"/);
+  assert.ok(html.indexOf('id="cle"') < html.indexOf('id="cle-indice"'), 'indice sous le champ');
+  assert.match(html, /type="file" multiple/);
   assert.match(html, /data-service="https:\/\/planning-accueil-depot\.netlify\.app"/);
   assert.match(html, /data-published="\[&quot;2026-10&quot;\]"/);
   assert.match(html, /data-aliases="\{&quot;SYVAIN&quot;:&quot;SYLVAIN&quot;\}"/);
-  assert.match(html, /connect-src https:\/\/planning-accueil-depot\.netlify\.app;/);
+  assert.match(html, /connect-src 'self' https:\/\/planning-accueil-depot\.netlify\.app;/);
   assert.match(html, /script-src 'self';/);
   assert.match(html, /autocomplete="current-password"/);
   assert.doesNotMatch(html, /github_pat_|personal-access-tokens/);
@@ -43,4 +47,14 @@ test('la publication copie la page d’ajout, le parser et SheetJS', (t) => {
     assert.ok(existsSync(path.join(root, 'public', file)), file);
   }
   assert.match(readFileSync(path.join(root, 'public', 'index.html'), 'utf8'), /href="ajouter\.html"/);
+});
+
+test('page des plannings : au-delà de six mois, les plus anciens sont repliés', () => {
+  const months = Array.from({ length: 8 }, (_, i) => ({
+    month: `2026-${String(12 - i).padStart(2, '0')}`, label: 'mois', title: '', source: '', processedAt: '', start: '2026-01-05', end: '2026-01-11', dayCount: 7, slotCount: 1, employees: [],
+  }));
+  const html = renderIndex({ updatedAt: '', subscriptions: [], months }, {});
+  assert.match(html, /<summary>Mois précédents \(2\)<\/summary>/);
+  assert.match(html, /class="fallback-wrap"/);
+  assert.match(html, /HTMLDialogElement/);
 });

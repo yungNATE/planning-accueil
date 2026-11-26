@@ -17,6 +17,7 @@ export const WEEKDAYS_FR = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', '
  */
 export function normalizeText(value) {
   return String(value ?? '')
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toUpperCase()
@@ -107,4 +108,13 @@ export function formatHour(hhmm) {
 /** @param {string} s */
 export function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * Numéro de série Excel → date civile « AAAA-MM-JJ ».
+ * @param {number} serial
+ * @param {boolean} [date1904] classeur au calendrier 1904 (anciens fichiers Mac)
+ */
+export function excelSerialToIso(serial, date1904 = false) {
+  return addDays(date1904 ? '1904-01-01' : '1899-12-30', Math.floor(serial));
 }
