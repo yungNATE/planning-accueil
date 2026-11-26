@@ -4,6 +4,8 @@
  * Module pur : il reçoit un classeur déjà lu par SheetJS (XLSX.read) et n'utilise aucune API Node,
  * il tourne aussi dans le navigateur (page d'ajout).
  *
+ * Le mois du planning vient uniquement du nom du fichier (options.source) ; les jours de la grille
+ * servent à fixer l'année si elle manque et à vérifier la cohérence.
  * Pour que les lignes et colonnes masquées et les dates Excel soient reconnues,
  * lire le classeur avec { cellNF: true, cellStyles: true }.
  */
@@ -183,7 +185,7 @@ function hasContent(/** @type {any} */ ws) {
 function readSheet(ws, date1904) {
   const hiddenRows = new Set((ws['!rows'] ?? []).flatMap((/** @type {any} */ row, /** @type {number} */ i) => (row?.hidden ? [i] : [])));
   const hiddenCols = new Set((ws['!cols'] ?? []).flatMap((/** @type {any} */ col, /** @type {number} */ i) => (col?.hidden ? [i] : [])));
-  /** @typedef {{ r: number, c: number, addr: string, text: string, date: string | null, monthTitle: { month: number, year: number } | null }} SheetCell */
+  /** @typedef {{ r: number, c: number, addr: string, text: string, date: string | null }} SheetCell */
   /** @type {Map<string, SheetCell>} */
   const cells = new Map();
   /** @type {Map<number, SheetCell[]>} */
@@ -203,18 +205,8 @@ function readSheet(ws, date1904) {
       hiddenWithContent++;
       continue;
     }
-    let date = null;
-    let monthTitle = null;
-    if (raw.t === 'n' && isDateFormat(raw.z) && raw.v > 20000 && raw.v < 80000) {
-      date = excelSerialToIso(raw.v, date1904);
-      const stripped = String(raw.z).replace(/"[^"]*"|\[[^\]]*\]|\\./g, '');
-      if (/m{3,}/i.test(stripped) && !/d/i.test(stripped)) {
-        const { y, m } = parseIso(date);
-        monthTitle = { month: m, year: y }; // titre saisi comme une date « octobre 2026 »
-        date = null;
-      }
-    }
-    const cell = { ...pos, addr: key, text, date, monthTitle };
+    const date = raw.t === 'n' && isDateFormat(raw.z) && raw.v > 20000 && raw.v < 80000 ? excelSerialToIso(raw.v, date1904) : null;
+    const cell = { ...pos, addr: key, text, date };
     cells.set(`${pos.r},${pos.c}`, cell);
     if (!byRow.has(pos.r)) byRow.set(pos.r, []);
     byRow.get(pos.r)?.push(cell);
@@ -254,21 +246,50 @@ function readSheet(ws, date1904) {
 /* Titre et jours                                                      */
 /* ------------------------------------------------------------------ */
 
+/** Noms de mois cherchés aussi à l'intérieur d'un mot (« PLANNINGOCTOBRE2026 ») ; les noms courts et ambigus
+    (MAI, MARS, MAY…) et les abréviations ne sont reconnus que comme mots entiers. */
+const MONTH_SUBSTRINGS = ['JANVIER', 'FEVRIER', 'AVRIL', 'JUILLET', 'SEPTEMBRE', 'OCTOBRE', 'NOVEMBRE', 'DECEMBRE',
+  'JANUARY', 'FEBRUARY', 'APRIL', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+
 /**
- * Mois (et année si présente) cités dans un texte : « PLG ACCUEIL OCTOBRE 2026 », « Planning oct. 26 ».
- * @param {string} text
- * @returns {{ month: number, year: number | null } | null}
+ * Mois (et année si présente) indiqués par le nom du fichier, quelles que soient la casse et les accents :
+ * « PLANNING_OCTOBRE_26.xlsx », « Planning décembre.xlsx », « 2026-12 planning Décembre 2026.xlsx ».
+ * @param {string} fileName
+ * @returns {{ month: number, year: number | null } | { error: string }}
  */
-function monthIn(text) {
-  const tokens = normalizeText(text).split(/[^A-Z0-9]+/).filter(Boolean);
-  for (let i = 0; i < tokens.length; i++) {
-    const month = MONTH_TOKENS.get(tokens[i]);
-    if (!month) continue;
-    const next = tokens[i + 1] ?? '';
-    const year = /^\d{4}$/.test(next) ? Number(next) : /^\d{2}$/.test(next) ? 2000 + Number(next) : null;
-    return { month, year };
+export function monthFromFileName(fileName) {
+  const name = String(fileName ?? '').split(/[\\/]/).pop() ?? '';
+  const stem = normalizeText(name.replace(/\.[^.]+$/, ''));
+  const tokens = stem.split(/[^A-Z0-9]+/).filter(Boolean);
+  /** @type {Map<number, number>} mois → position du mot */
+  const months = new Map();
+  tokens.forEach((t, i) => {
+    const m = MONTH_TOKENS.get(t);
+    if (m && !months.has(m)) months.set(m, i);
+  });
+  if (!months.size) {
+    for (const word of MONTH_SUBSTRINGS) {
+      const m = MONTH_TOKENS.get(word);
+      if (m && stem.includes(word) && !months.has(m)) months.set(m, -1);
+    }
   }
-  return null;
+  const shown = name || '(sans nom)';
+  if (!months.size) {
+    return { error: `Le nom du fichier « ${shown} » n’indique pas le mois : renommez-le, par exemple « Planning décembre 2026.xlsx ».` };
+  }
+  if (months.size > 1) {
+    const list = [...months.keys()].map((m) => monthLabel(`2000-${String(m).padStart(2, '0')}`).replace(/ 2000$/, '')).join(', ');
+    return { error: `Le nom du fichier « ${shown} » cite plusieurs mois (${list}) : gardez seulement celui du planning.` };
+  }
+  const [[month, at]] = [...months.entries()];
+  // Année : juste après le mois (« OCTOBRE 26 », « OCTOBRE 2026 »), sinon n'importe où (« 2026-10 … », « …OCTOBRE2026 »)
+  const next = at >= 0 ? tokens[at + 1] ?? '' : '';
+  let year = /^\d{4}$/.test(next) ? Number(next) : /^\d{2}$/.test(next) ? 2000 + Number(next) : null;
+  if (year === null) {
+    const any = /(?:^|[^0-9])(20\d{2})(?![0-9])/.exec(stem);
+    if (any) year = Number(any[1]);
+  }
+  return { month, year };
 }
 
 /**
@@ -293,55 +314,6 @@ function dayLabelOf(cell) {
   }
   if (month !== null && (month < 1 || month > 12)) return null;
   return { weekday: WEEKDAY_TOKENS.get(m[1]) ?? 0, day, month, exact: null };
-}
-
-/**
- * Mois qui compte le plus de jours dans une période.
- * @param {string} start
- * @param {number} count
- */
-function majorityMonth(start, count) {
-  /** @type {Map<string, number>} */
-  const perMonth = new Map();
-  for (let i = 0; i < count; i++) {
-    const key = addDays(start, i).slice(0, 7);
-    perMonth.set(key, (perMonth.get(key) ?? 0) + 1);
-  }
-  return [...perMonth.entries()].sort((a, b) => b[1] - a[1])[0][0];
-}
-
-/**
- * Planning sans aucun titre : mois déduit des jours. On retient les mois (du mois dernier aux deux
- * prochains) dont la période correspondrait aux libellés de jours ; plusieurs possibilités = ambiguïté.
- * @param {{ weekday: number, day: number, month: number | null, exact: string | null }} first premier jour du planning
- * @param {number} count nombre de jours du planning
- * @param {Date} now
- * @returns {{ month: number, year: number }[]}
- */
-function monthsFromDays(first, count, now) {
-  if (first.exact) {
-    const [y, m] = majorityMonth(first.exact, count).split('-').map(Number);
-    return [{ month: m, year: y }];
-  }
-  /** @type {Map<string, { month: number, year: number }>} */
-  const found = new Map();
-  for (let k = -1; k <= 2; k++) {
-    const target = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + k, 1));
-    const ty = target.getUTCFullYear();
-    const tm = target.getUTCMonth() + 1;
-    const key = `${ty}-${String(tm).padStart(2, '0')}`;
-    for (const delta of [-1, 0, 1]) {
-      const d = new Date(Date.UTC(ty, tm - 1 + delta, 1));
-      const y = d.getUTCFullYear();
-      const m = d.getUTCMonth() + 1;
-      if (first.month !== null && first.month !== m) continue;
-      if (first.day > daysInMonth(y, m)) continue;
-      const iso = toIso(y, m, first.day);
-      if (weekdayIndex(iso) !== first.weekday) continue;
-      if (majorityMonth(iso, count) === key) found.set(key, { month: tm, year: ty });
-    }
-  }
-  return [...found.values()];
 }
 
 /* ------------------------------------------------------------------ */
@@ -375,7 +347,7 @@ function parseSheet(ws, sheetName, options) {
   /** @typedef {{ r: number, c: number, addr: string, label: string, weekday: number, day: number, month: number | null, exact: string | null, date: string }} DayColumn */
   /** @type {{ r: number, cols: DayColumn[], strong: boolean }[]} */
   const headers = [];
-  const labelCells = new Set();
+
   for (const r of sheet.rows) {
     /** @type {DayColumn[]} */
     const cols = [];
@@ -385,62 +357,20 @@ function parseSheet(ws, sheetName, options) {
     }
     if (cols.length >= 3 || (cols.length >= 1 && headers.length > 0)) {
       headers.push({ r, cols, strong: cols.length >= 3 });
-      for (const col of cols) labelCells.add(col.addr);
     }
   }
   if (!headers.some((h) => h.strong)) return null;
   // Les lignes faibles avant la première ligne de jours franche ne comptent pas
   while (!headers[0].strong) headers.shift();
 
-  /* 2. Titre → mois et année (titre de la feuille, puis nom de l'onglet, puis nom du fichier) */
-  let titleInfo = null;
-  for (const cell of sheet.rows.flatMap((r) => sheet.row(r))) {
-    if (labelCells.has(cell.addr)) continue;
-    const found = cell.monthTitle ?? monthIn(cell.text);
-    if (found?.year) { titleInfo = { ...found, text: cell.text, from: 'titre' }; break; }
+  /* 2. Mois (et année éventuelle) : nom du fichier uniquement */
+  const fromName = monthFromFileName(source);
+  if ('error' in fromName) {
+    fail(fromName.error);
+    return result;
   }
-  if (!titleInfo) {
-    for (const [text, from] of [[sheetName, 'onglet'], [source, 'fichier']]) {
-      const found = monthIn(text);
-      if (found?.year) { titleInfo = { ...found, text, from }; break; }
-    }
-  }
-  if (!titleInfo) {
-    for (const cell of sheet.rows.flatMap((r) => sheet.row(r))) {
-      if (labelCells.has(cell.addr)) continue;
-      const found = monthIn(cell.text);
-      if (found) { titleInfo = { ...found, text: cell.text, from: 'titre' }; break; }
-    }
-  }
-  if (!titleInfo) {
-    for (const [text, from] of [[sheetName, 'onglet'], [source, 'fichier']]) {
-      const found = monthIn(text);
-      if (found) { titleInfo = { ...found, text, from }; break; }
-    }
-  }
-  if (!titleInfo) {
-    // Dernier recours : le mois se déduit des jours, s'il n'y a qu'une possibilité autour d'aujourd'hui
-    const daysCount = headers.reduce((n, h) => n + h.cols.length, 0);
-    const possible = monthsFromDays(headers[0].cols[0], daysCount, now);
-    const howTo = 'Ajoutez en haut de la feuille un titre avec le mois et l’année (par exemple « PLANNING DÉCEMBRE 2026 »), ou mettez le mois dans le nom du fichier.';
-    if (possible.length === 1) {
-      titleInfo = { ...possible[0], text: '', from: 'jours' };
-    } else if (possible.length > 1) {
-      const list = possible.map((p) => monthLabel(`${p.year}-${String(p.month).padStart(2, '0')}`)).join(' ou ');
-      fail(`Mois impossible à déterminer : aucun titre n’indique le mois, et les jours du planning peuvent correspondre à ${list}. ${howTo}`);
-      return result;
-    } else {
-      fail(`Titre introuvable : aucune cellule n’indique le mois, et les jours ne correspondent à aucun mois proche. ${howTo}`);
-      return result;
-    }
-  }
+  const titleInfo = { ...fromName, text: String(source).replace(/\.[^.]+$/, '') };
   result.title = titleInfo.text.replace(/\s+/g, ' ');
-  if (titleInfo.from === 'jours') {
-    const label = monthLabel(`${titleInfo.year}-${String(titleInfo.month).padStart(2, '0')}`);
-    warn(`Aucun titre, aucun onglet ni nom de fichier n’indique le mois : ${label} a été déduit des jours du planning. Vérifiez-le, et ajoutez un titre (par exemple « PLANNING ${label.toUpperCase()} ») pour éviter toute erreur.`);
-  }
-  if (titleInfo.from === 'onglet') warn(`Le titre de la feuille n’indique pas le mois : il a été lu dans le nom de l’onglet (« ${sheetName} »).`);
-  if (titleInfo.from === 'fichier') warn(`Le titre de la feuille n’indique pas le mois : il a été lu dans le nom du fichier (« ${source} »).`);
 
   /* 3. Dates : la première colonne fixe le départ ; chaque colonne suivante vaut un jour de plus,
         un saut (semaine absente) est accepté et signalé, un retour en arrière est une erreur. */
@@ -476,11 +406,11 @@ function parseSheet(ws, sheetName, options) {
     if (found) {
       start = found.iso;
       year = found.year;
-      warn(`Le titre n’indique pas l’année : ${year} a été retenue d’après les jours de la semaine.`);
+      warn(`Le nom du fichier n’indique pas l’année : ${year} a été retenue d’après les jours de la semaine.`);
     }
   }
   if (!start || !year) {
-    fail(`L’en-tête « ${first.label} » ne correspond à aucune date autour du mois du titre (${result.title}).`, first.addr);
+    fail(`L’en-tête « ${first.label} » ne correspond à aucune date autour de ${monthLabel(`${year ?? now.getUTCFullYear()}-${String(month).padStart(2, '0')}`)}, le mois indiqué par le nom du fichier : vérifiez le fichier ou son nom.`, first.addr);
     return result;
   }
   result.month = `${year}-${String(month).padStart(2, '0')}`;
@@ -524,13 +454,17 @@ function parseSheet(ws, sheetName, options) {
   result.end = usedCols[usedCols.length - 1].date;
   result.days = usedCols.map((col) => col.date);
 
-  // Le titre désigne-t-il bien le mois qui occupe l'essentiel du planning ?
+  // Le nom du fichier désigne-t-il bien le mois qui occupe l'essentiel du planning ?
   /** @type {Map<string, number>} */
   const perMonth = new Map();
   for (const d of result.days) perMonth.set(d.slice(0, 7), (perMonth.get(d.slice(0, 7)) ?? 0) + 1);
   const [mainMonth, mainCount] = [...perMonth.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (!perMonth.has(result.month)) {
+    fail(`Aucun jour de ce planning (du ${formatDateFr(result.start, { weekday: false })} au ${formatDateFr(result.end, { weekday: false })}) ne tombe en ${monthLabel(result.month)}, le mois indiqué par le nom du fichier : vérifiez le fichier ou son nom.`);
+    return result;
+  }
   if (mainMonth !== result.month && mainCount > (perMonth.get(result.month) ?? 0)) {
-    warn(`Le titre indique ${monthLabel(result.month)}, mais la plupart des jours sont en ${monthLabel(mainMonth)}. Le planning est classé en ${monthLabel(result.month)} : vérifiez le titre.`);
+    warn(`Le nom du fichier indique ${monthLabel(result.month)}, mais la plupart des jours sont en ${monthLabel(mainMonth)}. Le planning est classé en ${monthLabel(result.month)} : vérifiez le nom du fichier.`);
   }
 
   /* 4. Lignes d'employés, bloc par bloc */
@@ -754,11 +688,12 @@ function parseSheet(ws, sheetName, options) {
 /* ------------------------------------------------------------------ */
 
 /**
- * Lit toutes les feuilles visibles qui contiennent un planning (un classeur peut avoir un onglet par mois).
+ * Lit le planning d'un classeur. Le mois vient du nom du fichier (options.source) ; si plusieurs onglets
+ * visibles contiennent un planning, celui dont les jours correspondent le mieux à ce mois est retenu.
  * @param {any} workbook classeur renvoyé par XLSX.read
  * @param {ParseOptions} [options]
  * @returns {{ plannings: ParsedPlanning[], errors: Issue[] }}
- *   errors : problèmes qui concernent tout le fichier (aucun planning, mois en double…)
+ *   plannings : zéro ou un planning ; errors : problèmes qui concernent tout le fichier (aucun planning…)
  */
 export function parseWorkbook(workbook, options = {}) {
   const names = /** @type {string[]} */ (workbook?.SheetNames ?? []);
@@ -782,22 +717,21 @@ export function parseWorkbook(workbook, options = {}) {
         : 'Le fichier ne contient aucune feuille remplie.',
     });
   }
-  // Un même mois dans deux onglets : ambigu
-  /** @type {Map<string, string>} */
-  const seen = new Map();
-  for (const p of plannings) {
-    if (!p.month) continue;
-    const other = seen.get(p.month);
-    if (other !== undefined) {
-      p.errors.push({ message: `Les onglets « ${other} » et « ${p.sheet} » concernent tous les deux ${monthLabel(p.month)} : gardez-en un seul.` });
-      p.ok = false;
-    } else seen.set(p.month, p.sheet);
+  // Plusieurs onglets de planning : le mois vient du nom du fichier, on garde l'onglet dont les jours y correspondent le mieux
+  if (plannings.length > 1) {
+    const score = (/** @type {ParsedPlanning} */ p) => (p.month ? p.days.filter((d) => d.startsWith(p.month)).length : -1);
+    const best = [...plannings].sort((a, b) => Number(b.ok) - Number(a.ok) || score(b) - score(a))[0];
+    if (best.month) {
+      const others = plannings.filter((p) => p !== best).map((p) => `« ${p.sheet} »`).join(', ');
+      best.warnings.push({ message: `Le classeur contient d’autres onglets de planning (${others}) : seul l’onglet « ${best.sheet} », dont les jours correspondent le mieux à ${monthLabel(best.month)}, est publié.` });
+    }
+    plannings = [best];
   }
   return { plannings, errors };
 }
 
 /**
- * Lit le premier planning d'un classeur (raccourci pour un fichier d'un seul mois).
+ * Lit le planning d'un classeur (raccourci de parseWorkbook).
  * @param {any} workbook
  * @param {ParseOptions} [options]
  * @returns {ParsedPlanning}
