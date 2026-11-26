@@ -619,3 +619,11 @@ code {
 
 .button-danger:disabled,
 .button-secondary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.technical {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}

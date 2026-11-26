@@ -119,13 +119,29 @@ function github(s: Settings, path: string, init: RequestInit = {}): Promise<Resp
   });
 }
 
-/** Erreur GitHub → réponse compréhensible pour la page d'ajout */
+/**
+ * Erreur GitHub → réponse compréhensible pour la page d'ajout. La raison donnée par GitHub est jointe (detail)
+ * et écrite dans les journaux de la fonction (Netlify > Logs > Functions) pour le diagnostic.
+ */
+async function githubError(response: Response, action: string, origin: string): Promise<Response> {
+  let reason = "";
+  try {
+    reason = String(((await response.json()) as { message?: string }).message ?? "");
+  } catch { /* réponse sans JSON */ }
+  const detail = `${action} : GitHub ${response.status}${reason ? ` « ${reason.slice(0, 200)} »` : ""}`;
+  console.error(`[depot] ${detail}`);
+  const res = githubFailure(response.status, origin);
+  const body = (await res.json()) as Record<string, unknown>;
+  return reply(res.status, { ...body, detail }, origin);
+}
+
+/** Erreur GitHub → code et message pour la page d'ajout */
 function githubFailure(status: number, origin: string): Response {
   if (status === 401) {
     return fail(502, "cle-github", "La clé GitHub du service de dépôt a expiré ou a été supprimée.", origin);
   }
   if (status === 403 || status === 404) {
-    return fail(502, "droits-github", "La clé GitHub du service de dépôt n’a pas le droit d’écrire dans le dépôt.", origin);
+    return fail(502, "droits-github", "La clé GitHub du service de dépôt n’a pas le droit d’écrire dans le dépôt (permission « Contents » en lecture seule, ou dépôt non sélectionné dans la clé).", origin);
   }
   if (status === 409 || status === 422) {
     return fail(409, "conflit", "Le dépôt a changé pendant l’envoi. Cliquez à nouveau sur « Publier ce planning ».", origin);
@@ -143,14 +159,14 @@ async function putFile(s: Settings, repoPath: string, base64: string, message: s
   const path = `/repos/${s.repo}/contents/${repoPath.split("/").map(encodeURIComponent).join("/")}`;
   for (let attempt = 1; attempt <= 2; attempt++) {
     const existing = await github(s, `${path}?ref=${encodeURIComponent(s.branch)}`);
-    if (!existing.ok && existing.status !== 404) return githubFailure(existing.status, s.origin);
+    if (!existing.ok && existing.status !== 404) return githubError(existing, `lecture de ${repoPath}`, s.origin);
     const sha = existing.ok ? ((await existing.json()) as { sha?: string }).sha : undefined;
     const saved = await github(s, path, {
       method: "PUT",
       body: JSON.stringify({ message, content: base64, branch: s.branch, ...(sha ? { sha } : {}) }),
     });
     if (saved.ok) return { sha: ((await saved.json()) as { commit?: { sha?: string } }).commit?.sha ?? "" };
-    if (!(saved.status === 409 || saved.status === 422) || attempt === 2) return githubFailure(saved.status, s.origin);
+    if (!(saved.status === 409 || saved.status === 422) || attempt === 2) return githubError(saved, `écriture de ${repoPath}`, s.origin);
   }
   return githubFailure(409, s.origin);
 }
@@ -185,7 +201,7 @@ async function supprimer(body: Body, s: Settings): Promise<Response> {
 
 async function runs(s: Settings, query: string): Promise<Run[] | Response> {
   const response = await github(s, `/repos/${s.repo}/actions/${query}`);
-  if (!response.ok) return githubFailure(response.status, s.origin);
+  if (!response.ok) return githubError(response, "suivi de la publication", s.origin);
   return ((await response.json()) as { workflow_runs?: Run[] }).workflow_runs ?? [];
 }
 

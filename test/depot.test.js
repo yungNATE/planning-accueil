@@ -217,3 +217,15 @@ test('suppression : mois invalide ou mot de passe faux refusés sans appel à Gi
   assert.equal((await post('supprimer', { motDePasse: 'faux', mois: '2026-10' })).status, 401);
   assert.equal(calls.length, 0);
 });
+
+test('droits GitHub insuffisants : raison exacte de GitHub jointe à la réponse', async () => {
+  github = (url, init) => (init.method === 'PUT'
+    ? Response.json({ message: 'Resource not accessible by personal access token' }, { status: 403 })
+    : Response.json({}, { status: 404 }));
+  const res = await post('supprimer', { motDePasse: 'Jardin Lune 42', mois: '2026-10' });
+  const body = await res.json();
+  assert.equal(res.status, 502);
+  assert.equal(body.erreur, 'droits-github');
+  assert.match(body.message, /lecture seule, ou dépôt non sélectionné/);
+  assert.equal(body.detail, 'écriture de demandes/supprimer-2026-10.json : GitHub 403 « Resource not accessible by personal access token »');
+});
