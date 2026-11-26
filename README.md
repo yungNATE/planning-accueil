@@ -4,7 +4,7 @@ Ce dépôt transforme chaque planning mensuel Excel de l’accueil en agendas `.
 
 **https://yungnate.github.io/planning-accueil/**
 
-Sur la page, chacun choisit le mois, puis son nom, et récupère ses horaires dans son application d’agenda (Google Agenda, Apple Calendrier, Outlook…).
+Sur la page, chacun choisit le mois, puis son nom, et récupère ses horaires dans son application d’agenda (Google Agenda, Apple Calendrier, Outlook…). Un lien discret en bas de la fenêtre du mois permet aussi de télécharger le fichier Excel d’origine.
 
 > **À savoir :** le dépôt et la page sont publics. Toute personne qui a l’adresse peut lire les plannings (prénoms et horaires). La page n’est pas référencée par les moteurs de recherche.
 
@@ -138,7 +138,7 @@ Après une modification de la configuration, retraitez tous les plannings (voir 
 
 - `src/parse-planning.js` lit la grille Excel (SheetJS) sans coordonnées fixes : lignes de jours, cellules fusionnées, prénoms, horaires ; le mois vient du nom du fichier.
 - `src/ics.js` écrit les fichiers iCalendar (RFC 5545) avec le fuseau `Europe/Paris` : les horaires restent justes aux changements d’heure.
-- `src/process.js` traite les fichiers déposés, écrit `data/<AAAA-MM>.json` et `public/ics/<AAAA-MM>/<prénom>.ics`, puis reconstruit les abonnements `public/ics/<prénom>.ics`, le manifeste et les pages.
+- `src/process.js` traite les fichiers déposés, écrit `data/<AAAA-MM>.json` et `public/ics/<AAAA-MM>/<prénom>.ics`, copie l’Excel d’origine de chaque mois dans `public/excel/<AAAA-MM>.xlsx`, puis reconstruit les abonnements `public/ics/<prénom>.ics`, le manifeste et les pages.
 - `site/upload.js` (page d’ajout) réutilise dans le navigateur `parse-planning.js`, `util.js`, `names.js` et SheetJS, copiés dans `public/assets/` à chaque publication, puis envoie le fichier au service de dépôt et suit l’exécution de l’Action.
 - `depot/netlify/functions/depot.mts` (service de dépôt) : routes `/api/verifier`, `/api/deposer`, `/api/supprimer` et `/api/suivi`, appels à l’API GitHub avec `GITHUB_TOKEN`, accès limité au site des plannings (CORS). Une suppression dépose une demande `demandes/supprimer-AAAA-MM.json`, que la publication traite puis retire.
 - `.github/workflows/publier.yml` lance les tests, la conversion, enregistre les fichiers générés dans le dépôt, puis publie `public/` sur GitHub Pages.

@@ -33,12 +33,17 @@ test('supprimer un mois retire son fichier Excel, ses données, ses agendas et s
   runProcess({ root, all: true, now: NOW });
   const novemberIcs = read(root, 'public/ics/2026-11/nathan.ics');
   assert.equal(read(root, 'public/ics/nathan.ics').match(/BEGIN:VEVENT/g)?.length, 25 + 28);
+  // Fichiers Excel d'origine proposés au téléchargement, octet pour octet
+  assert.ok(readFileSync(path.join(root, 'public/excel/2026-10.xlsx')).equals(readFileSync(OCTOBER)));
+  assert.match(read(root, 'public/index.html'), /href="excel\/2026-10\.xlsx" download="PLANNING_OCTOBRE_26\.xlsx"/);
 
   const report = runProcess({ root, files: [], deleteMonths: ['2026-10'], now: NOW });
   assert.deepEqual(report.deleted, [{ month: '2026-10', removed: ['data/2026-10.json', path.join('plannings', 'PLANNING_OCTOBRE_26.xlsx')] }]);
   assert.equal(exists(root, 'data/2026-10.json'), false);
   assert.equal(exists(root, 'plannings/PLANNING_OCTOBRE_26.xlsx'), false);
   assert.equal(exists(root, 'public/ics/2026-10'), false);
+  assert.equal(exists(root, 'public/excel/2026-10.xlsx'), false, 'Excel d’origine retiré du site');
+  assert.ok(exists(root, 'public/excel/2026-11.xlsx'));
   // Louna n'existait qu'en octobre : son agenda d'abonnement disparaît
   assert.equal(exists(root, 'public/ics/louna.ics'), false);
   assert.equal(read(root, 'public/ics/nathan.ics').match(/BEGIN:VEVENT/g)?.length, 28);

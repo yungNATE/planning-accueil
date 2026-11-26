@@ -316,6 +316,17 @@ a.person__download:hover { text-decoration: underline; }
 
 .howto { margin-top: 1.5rem; }
 
+/* Lien discret vers le fichier Excel d'origine */
+.sheet__source {
+  margin: 1rem 0 0;
+  font-size: 0.875rem;
+}
+
+.sheet__source a,
+.fallback-excel a { color: var(--muted); }
+
+.fallback-excel { margin: 0.75rem 0 0; font-size: 0.875rem; color: var(--muted); }
+
 .howto summary {
   cursor: pointer;
   font-weight: 600;

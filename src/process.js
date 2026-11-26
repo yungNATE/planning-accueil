@@ -373,7 +373,22 @@ export function runProcess(options) {
     subscriptions.push({ name: person.name, slug, file: `ics/${slug}.ics`, slotCount: person.events.length });
   }
 
-  /* 4. Manifeste et page */
+  /* 4. Fichiers Excel d'origine, copiés dans le site pour être téléchargés (un par mois, nom stable) */
+  const excelDir = path.join(publicDir, 'excel');
+  rmSync(excelDir, { recursive: true, force: true });
+  mkdirSync(excelDir, { recursive: true });
+  /** @type {Map<string, { file: string, name: string }>} */
+  const excels = new Map();
+  for (const d of all) {
+    const source = typeof d.source === 'string' ? path.basename(d.source) : '';
+    const abs = source ? path.join(root, 'plannings', source) : '';
+    if (!abs || !existsSync(abs)) continue;
+    const ext = path.extname(source).toLowerCase() || '.xlsx';
+    copyFileSync(abs, path.join(excelDir, `${d.month}${ext}`));
+    excels.set(d.month, { file: `excel/${d.month}${ext}`, name: source });
+  }
+
+  /* 5. Manifeste et page */
   /** @type {import('./site.js').Manifest} */
   const manifest = {
     updatedAt: all.reduce((max, d) => (d.processedAt > max ? d.processedAt : max), ''),
@@ -387,6 +402,8 @@ export function runProcess(options) {
       end: d.end,
       dayCount: d.days.length,
       slotCount: d.employees.reduce((/** @type {number} */ n, /** @type {any} */ e) => n + e.slotCount, 0),
+      excel: excels.get(d.month)?.file ?? null,
+      excelName: excels.get(d.month)?.name ?? null,
       employees: d.employees.map((/** @type {any} */ e) => ({
         name: e.name, slug: e.slug, slotCount: e.slotCount, file: e.slotCount ? `ics/${d.month}/${e.slug}.ics` : null,
       })),

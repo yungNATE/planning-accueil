@@ -69,3 +69,14 @@ test('page d’ajout : section de suppression avec un bouton par mois publié', 
   assert.match(html, /data-delete="2026-11">Supprimer<span class="visually-hidden"> le planning de novembre 2026<\/span>/);
   assert.match(html, /<p class="empty" data-delete-empty hidden>/);
 });
+
+test('page des plannings : lien discret vers le fichier Excel d’origine du mois', () => {
+  const month = {
+    month: '2026-10', label: 'octobre 2026', title: '', source: '', processedAt: '', start: '2026-09-28', end: '2026-11-01', dayCount: 35, slotCount: 1,
+    employees: [], excel: 'excel/2026-10.xlsx', excelName: 'PLANNING_OCTOBRE_26.xlsx',
+  };
+  const html = renderIndex({ updatedAt: '', subscriptions: [], months: [month, { ...month, month: '2026-09', label: 'septembre 2026', excel: null, excelName: null }] }, {});
+  assert.match(html, /<p class="sheet__source"><a href="excel\/2026-10\.xlsx" download="PLANNING_OCTOBRE_26\.xlsx">Télécharger le fichier Excel d’origine<span class="visually-hidden"> du planning d’octobre 2026<\/span><\/a><\/p>/);
+  assert.equal(html.match(/class="sheet__source"/g).length, 1, 'pas de lien quand le fichier n’existe plus');
+  assert.match(html, /Fichiers Excel d’origine : <a href="excel\/2026-10\.xlsx"/);
+});

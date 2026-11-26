@@ -31,7 +31,8 @@ const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
  * @typedef {{ name: string, slug: string, slotCount: number, file: string | null }} ManifestPerson
  * @typedef {{
  *   month: string, label: string, title: string, source: string, processedAt: string,
- *   start: string, end: string, dayCount: number, slotCount: number, employees: ManifestPerson[]
+ *   start: string, end: string, dayCount: number, slotCount: number, employees: ManifestPerson[],
+ *   excel?: string | null, excelName?: string | null
  * }} ManifestMonth
  * @typedef {{ name: string, slug: string, file: string, slotCount: number }} ManifestSubscription
  * @typedef {{ updatedAt: string, months: ManifestMonth[], subscriptions: ManifestSubscription[] }} Manifest
@@ -144,6 +145,7 @@ export function renderIndex(manifest, settings = {}) {
             <dd>Dans le calendrier, choisissez « Ajouter un calendrier », puis « S’abonner à partir du web », et collez l’adresse copiée.</dd>
           </dl>
         </details>
+        ${m.excel ? `<p class="sheet__source"><a href="${esc(m.excel)}" download="${esc(m.excelName ?? '')}">Télécharger le fichier Excel d’origine<span class="visually-hidden"> du planning ${esc(ofMonth(m.label))}</span></a></p>` : ''}
         <p class="visually-hidden" aria-live="polite" data-announce></p>
       </div>
     </dialog>`;
@@ -193,6 +195,7 @@ export function renderIndex(manifest, settings = {}) {
           <tbody>${fallbackRows}
           </tbody>
         </table>
+        ${manifest.months.some((m) => m.excel) ? `<p class="fallback-excel">Fichiers Excel d’origine : ${manifest.months.filter((m) => m.excel).map((m) => `<a href="${esc(m.excel)}" download="${esc(m.excelName ?? '')}">${esc(capitalize(m.label))}</a>`).join(', ')}.</p>` : ''}
       </div>
     </section>
 
