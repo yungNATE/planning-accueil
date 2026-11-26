@@ -9,6 +9,7 @@ on:
       - 'site/**'
       - 'config/**'
       - 'test/**'
+      - 'depot/**'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/publier.yml'

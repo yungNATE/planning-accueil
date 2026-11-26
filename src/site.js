@@ -198,14 +198,16 @@ ${dialogs}
 
 /**
  * Page d'ajout d'un planning : le navigateur vérifie le fichier avec le même parser que l'Action,
- * puis l'enregistre dans le dépôt via l'API GitHub, avec une clé d'accès personnelle.
+ * puis l'envoie au service de dépôt (fonction Netlify) qui l'enregistre dans le dépôt GitHub.
+ * La personne qui dépose n'a qu'un mot de passe à saisir.
  * @param {Manifest} manifest
- * @param {{ depot?: string, branche?: string }} settings
+ * @param {{ serviceDepot?: string, depot?: string }} settings
  * @param {Record<string, string>} aliases
  */
 export function renderUpload(manifest, settings = {}, aliases = {}) {
+  const service = (settings.serviceDepot ?? '').replace(/\/+$/, '');
+  const serviceOrigin = service ? new URL(service).origin : '';
   const repo = settings.depot ?? '';
-  const branch = settings.branche || 'main';
   const published = manifest.months.map((m) => m.month);
   return `<!doctype html>
 <html lang="fr">
@@ -214,7 +216,7 @@ export function renderUpload(manifest, settings = {}, aliases = {}) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <meta name="color-scheme" content="light dark">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://api.github.com; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ${esc(serviceOrigin)}; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <title>Ajouter un planning – Plannings de l’accueil</title>
   <link rel="icon" href="${FAVICON}">
@@ -222,37 +224,28 @@ export function renderUpload(manifest, settings = {}, aliases = {}) {
   <script type="module" src="assets/upload.js"></script>
 </head>
 <body>
-  <main class="page" data-upload data-repo="${esc(repo)}" data-branch="${esc(branch)}" data-published="${esc(JSON.stringify(published))}" data-aliases="${esc(JSON.stringify(aliases))}">
+  <main class="page" data-upload data-service="${esc(service)}" data-repo="${esc(repo)}" data-published="${esc(JSON.stringify(published))}" data-aliases="${esc(JSON.stringify(aliases))}">
     <p class="back"><a href="./">Retour aux plannings</a></p>
     <header class="intro">
       <h1>Ajouter un planning</h1>
-      <p>Le fichier est vérifié ici, puis enregistré dans le dépôt GitHub. Les agendas sont générés et mis en ligne dans la minute qui suit.</p>
+      <p>Choisissez le fichier Excel du mois : il est vérifié ici, puis mis en ligne. Les agendas de chacun sont prêts dans la minute qui suit.</p>
     </header>
 
-    <noscript><p class="notice notice--error">Cette page a besoin de JavaScript. Vous pouvez aussi déposer le fichier directement sur GitHub, dans le dossier « plannings » du dépôt.</p></noscript>
+    <noscript><p class="notice notice--error">Cette page a besoin de JavaScript pour fonctionner.</p></noscript>
 
     <section class="step" id="etape-cle" aria-labelledby="titre-cle" hidden>
-      <h2 id="titre-cle">Clé d’accès GitHub</h2>
-      <p>Pour enregistrer un fichier dans le dépôt, le site a besoin d’une clé qui l’y autorise. Elle est demandée une seule fois et ne quitte pas cet appareil, sauf vers GitHub.</p>
-      <details class="howto">
-        <summary>Créer la clé</summary>
-        <ol>
-          <li>Ouvrez <a href="https://github.com/settings/personal-access-tokens/new" rel="noopener">la création de clé (fine-grained token) sur GitHub</a>, connecté au compte propriétaire du dépôt.</li>
-          <li>Donnez-lui un nom, par exemple « Plannings accueil », et une date d’expiration.</li>
-          <li>Dans « Repository access », choisissez « Only select repositories », puis <strong>${esc(repo.split('/')[1] ?? repo)}</strong>.</li>
-          <li>Dans « Permissions », réglez <strong>Contents</strong> sur « Read and write » et <strong>Actions</strong> sur « Read-only ».</li>
-          <li>Validez, puis copiez la clé affichée (elle commence par <code>github_pat_</code>).</li>
-        </ol>
-      </details>
+      <h2 id="titre-cle">Mot de passe</h2>
+      <p>Saisissez le mot de passe de dépôt des plannings. Si vous cochez « Mémoriser », il ne sera plus demandé sur cet appareil.</p>
       <form class="token-form" data-token-form novalidate>
-        <label for="cle">Clé d’accès</label>
+        <input type="text" name="identifiant" value="plannings-accueil" autocomplete="username" hidden>
+        <label for="cle">Mot de passe de dépôt</label>
         <div class="field-row">
-          <input id="cle" name="cle" type="password" autocomplete="off" spellcheck="false" required aria-describedby="cle-erreur">
-          <button type="submit" class="button-primary">Enregistrer la clé</button>
+          <input id="cle" name="cle" type="password" autocomplete="current-password" spellcheck="false" required aria-describedby="cle-erreur">
+          <button type="submit" class="button-primary">Continuer</button>
         </div>
         <p class="checkbox">
           <input id="memoriser" name="memoriser" type="checkbox" checked>
-          <label for="memoriser">Mémoriser la clé sur cet appareil</label>
+          <label for="memoriser">Mémoriser sur cet appareil</label>
         </p>
         <p class="field-error" id="cle-erreur" data-token-error></p>
       </form>
@@ -270,7 +263,7 @@ export function renderUpload(manifest, settings = {}, aliases = {}) {
         <button type="button" class="button-primary" data-publish>Publier ce planning</button>
       </p>
       <div class="status" role="status" data-status></div>
-      <p class="token-info" data-token-info hidden>Clé enregistrée sur cet appareil. <button type="button" class="link-button" data-forget>Oublier la clé</button></p>
+      <p class="token-info" data-token-info hidden>Mot de passe mémorisé sur cet appareil. <button type="button" class="link-button" data-forget>Oublier le mot de passe</button></p>
     </section>
   </main>
 </body>

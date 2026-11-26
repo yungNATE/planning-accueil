@@ -10,28 +10,16 @@ Sur la page, chacun choisit le mois, puis son nom, et récupère ses horaires da
 
 ## Ajouter le planning du mois
 
-### Depuis le site
+### Depuis le site (le plus simple)
 
-1. En bas de la page des plannings, cliquez sur **Ajouter un planning** (ou ouvrez directement https://yungnate.github.io/planning-accueil/ajouter.html).
-2. La première fois, enregistrez une **clé d’accès GitHub** (voir ci-dessous).
+1. En bas de la page des plannings, cliquez sur **Ajouter un planning** (ou ouvrez https://yungnate.github.io/planning-accueil/ajouter.html).
+2. La première fois, saisissez le **mot de passe de dépôt** et laissez « Mémoriser sur cet appareil » coché : il ne sera plus demandé.
 3. Choisissez le fichier Excel. La page le vérifie aussitôt avec le même lecteur que la publication : mois, période, prénoms, nombre de créneaux, et les éventuels problèmes avec la case concernée.
 4. Cliquez sur **Publier ce planning**. La page suit la mise en ligne et confirme quand le mois est publié, en général en moins d’une minute.
 
-Un fichier qui contient une erreur ne peut pas être publié : la page indique quoi corriger.
+Un fichier qui contient une erreur ne peut pas être publié : la page indique quoi corriger dans Excel.
 
-**Créer la clé d’accès (une seule fois par appareil)**
-
-Le site n’a pas de serveur : c’est votre navigateur qui enregistre le fichier dans le dépôt, avec une clé que GitHub vous délivre.
-
-1. Connecté au compte propriétaire du dépôt, ouvrez https://github.com/settings/personal-access-tokens/new
-2. Nom : « Plannings accueil » ; choisissez une date d’expiration.
-3. « Repository access » : « Only select repositories », puis `planning-accueil`.
-4. « Permissions » : **Contents** en « Read and write », **Actions** en « Read-only ».
-5. Validez, copiez la clé (elle commence par `github_pat_`) et collez-la sur la page d’ajout.
-
-La clé reste dans le navigateur de l’appareil (ou seulement le temps de la session si vous décochez « Mémoriser »). Elle ne donne accès qu’à ce dépôt. « Oublier la clé », en bas de la page d’ajout, l’efface de l’appareil ; pour la désactiver complètement, supprimez-la sur GitHub au même endroit. À l’expiration, créez-en une nouvelle de la même façon.
-
-Ne partagez cette clé qu’avec des personnes de confiance : elle permet de modifier les fichiers du dépôt.
+Aucun compte GitHub ni aucune clé n’est nécessaire pour déposer : c’est le **service de dépôt** (voir plus bas) qui détient l’accès au dépôt.
 
 ### Depuis GitHub
 
@@ -84,13 +72,31 @@ Un fichier en erreur n’est pas publié, mais il ne bloque pas les autres : les
 
 Utile après une modification de l’outil ou de la configuration : onglet **Actions**, workflow **Publier les plannings**, bouton **Run workflow**. Laissez le champ vide pour tout retraiter, ou indiquez le nom d’un fichier de `plannings/`.
 
+## Service de dépôt (Netlify)
+
+La page d’ajout envoie le fichier à une petite fonction hébergée gratuitement sur Netlify (projet `planning-accueil-depot`, code dans [`depot/`](depot)). Elle vérifie le mot de passe, puis enregistre le fichier dans `plannings/` avec une clé GitHub qu’elle est seule à connaître. Netlify redéploie la fonction automatiquement quand le dossier `depot/` change.
+
+Réglages dans Netlify, projet `planning-accueil-depot` → **Project configuration** → **Environment variables** (portée « Functions ») :
+
+| Variable | Contenu |
+| --- | --- |
+| `GITHUB_TOKEN` | clé GitHub *fine-grained* : dépôt `planning-accueil` uniquement, **Contents** en « Read and write », **Actions** en « Read-only », sans expiration |
+| `MOT_DE_PASSE` | mot de passe demandé sur la page d’ajout |
+
+Après toute modification d’une variable : **Deploys** → **Trigger deploy** → **Deploy project**, sinon l’ancienne valeur reste active.
+
+- **Changer le mot de passe** : modifiez `MOT_DE_PASSE`, redéployez, communiquez le nouveau. Sur les appareils où l’ancien était mémorisé, la page redemande simplement le mot de passe.
+- **Si la page affiche « La clé GitHub du service de dépôt a expiré ou a été supprimée »** : créez une nouvelle clé GitHub avec les mêmes réglages (https://github.com/settings/personal-access-tokens/new), remplacez `GITHUB_TOKEN`, redéployez.
+- **En secours**, le dépôt direct sur GitHub (ci-dessous) fonctionne toujours, pour qui a accès au dépôt.
+
 ## Configuration
 
 - `config/settings.json`
   - `titre` : début du nom des événements et des agendas (`Accueil 15h30–23h`) ;
   - `lieu` : lieu ajouté à chaque événement (vide par défaut) ;
   - `siteUrl` : adresse publique du site ;
-  - `depot` et `branche` : dépôt et branche où la page d’ajout enregistre les fichiers.
+  - `depot` : dépôt GitHub (`propriétaire/nom`) ;
+  - `serviceDepot` : adresse du service de dépôt utilisé par la page d’ajout.
 - `config/aliases.json` : correspondances de prénoms, par exemple `{ "SYLV": "SYLVAIN" }`. Une entrée vers lui-même (`{ "LEO": "LEO" }`) empêche tout rapprochement automatique avec un prénom proche.
 
 Après une modification de la configuration, retraitez tous les plannings (voir ci-dessus).
@@ -100,7 +106,8 @@ Après une modification de la configuration, retraitez tous les plannings (voir 
 - `src/parse-planning.js` lit la grille Excel (SheetJS) sans coordonnées fixes : titre, lignes de jours, cellules fusionnées, prénoms, horaires.
 - `src/ics.js` écrit les fichiers iCalendar (RFC 5545) avec le fuseau `Europe/Paris` : les horaires restent justes aux changements d’heure.
 - `src/process.js` traite les fichiers déposés, écrit `data/<AAAA-MM>.json` et `public/ics/<AAAA-MM>/<prénom>.ics`, puis reconstruit les abonnements `public/ics/<prénom>.ics`, le manifeste et les pages.
-- `site/upload.js` (page d’ajout) réutilise dans le navigateur `parse-planning.js`, `util.js`, `names.js` et SheetJS, copiés dans `public/assets/` à chaque publication, puis enregistre le fichier via l’API GitHub (`PUT /repos/…/contents/plannings/…`) et suit l’exécution de l’Action.
+- `site/upload.js` (page d’ajout) réutilise dans le navigateur `parse-planning.js`, `util.js`, `names.js` et SheetJS, copiés dans `public/assets/` à chaque publication, puis envoie le fichier au service de dépôt et suit l’exécution de l’Action.
+- `depot/netlify/functions/depot.mts` (service de dépôt) : routes `/api/verifier`, `/api/deposer` et `/api/suivi`, appels à l’API GitHub avec `GITHUB_TOKEN`, accès limité au site des plannings (CORS).
 - `.github/workflows/publier.yml` lance les tests, la conversion, enregistre les fichiers générés dans le dépôt, puis publie `public/` sur GitHub Pages.
 
 En local (Node 22 ou plus) :

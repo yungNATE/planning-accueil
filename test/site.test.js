@@ -10,17 +10,19 @@ import { runProcess } from '../src/process.js';
 import { renderUpload } from '../src/site.js';
 import { OCTOBER, ROOT } from './helpers.js';
 
-test('la page d’ajout connaît le dépôt, les mois publiés et limite les connexions à l’API GitHub', () => {
+test('la page d’ajout connaît le service de dépôt, les mois publiés et ne se connecte qu’à ce service', () => {
   const html = renderUpload(
     { updatedAt: '', subscriptions: [], months: [{ month: '2026-10' }] },
-    { depot: 'yungNATE/planning-accueil', branche: 'main' },
+    { serviceDepot: 'https://planning-accueil-depot.netlify.app/', depot: 'yungNATE/planning-accueil' },
     { SYVAIN: 'SYLVAIN' },
   );
-  assert.match(html, /data-repo="yungNATE\/planning-accueil"/);
+  assert.match(html, /data-service="https:\/\/planning-accueil-depot\.netlify\.app"/);
   assert.match(html, /data-published="\[&quot;2026-10&quot;\]"/);
   assert.match(html, /data-aliases="\{&quot;SYVAIN&quot;:&quot;SYLVAIN&quot;\}"/);
-  assert.match(html, /connect-src https:\/\/api\.github\.com;/);
+  assert.match(html, /connect-src https:\/\/planning-accueil-depot\.netlify\.app;/);
   assert.match(html, /script-src 'self';/);
+  assert.match(html, /autocomplete="current-password"/);
+  assert.doesNotMatch(html, /github_pat_|personal-access-tokens/);
 });
 
 test('les modules du parser utilisés dans le navigateur n’importent aucune API Node', () => {

@@ -1,0 +1,10 @@
+# Service de dépôt des plannings sur Netlify : seul le dossier depot/ est déployé.
+# Le site des plannings, lui, reste sur GitHub Pages (workflow .github/workflows/publier.yml).
+[build]
+  base = "depot"
+  publish = "public"
+  functions = "netlify/functions"
+  command = "echo 'Aucune étape de construction'"
+  # Pas de nouveau déploiement Netlify quand seuls les plannings ou le site changent
+  # (le premier déploiement, où les deux références sont égales, a toujours lieu)
+  ignore = "[ \"$CACHED_COMMIT_REF\" != \"$COMMIT_REF\" ] && git diff --quiet \"$CACHED_COMMIT_REF\" \"$COMMIT_REF\" -- ."
