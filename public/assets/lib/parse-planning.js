@@ -295,6 +295,55 @@ function dayLabelOf(cell) {
   return { weekday: WEEKDAY_TOKENS.get(m[1]) ?? 0, day, month, exact: null };
 }
 
+/**
+ * Mois qui compte le plus de jours dans une période.
+ * @param {string} start
+ * @param {number} count
+ */
+function majorityMonth(start, count) {
+  /** @type {Map<string, number>} */
+  const perMonth = new Map();
+  for (let i = 0; i < count; i++) {
+    const key = addDays(start, i).slice(0, 7);
+    perMonth.set(key, (perMonth.get(key) ?? 0) + 1);
+  }
+  return [...perMonth.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}
+
+/**
+ * Planning sans aucun titre : mois déduit des jours. On retient les mois (du mois dernier aux deux
+ * prochains) dont la période correspondrait aux libellés de jours ; plusieurs possibilités = ambiguïté.
+ * @param {{ weekday: number, day: number, month: number | null, exact: string | null }} first premier jour du planning
+ * @param {number} count nombre de jours du planning
+ * @param {Date} now
+ * @returns {{ month: number, year: number }[]}
+ */
+function monthsFromDays(first, count, now) {
+  if (first.exact) {
+    const [y, m] = majorityMonth(first.exact, count).split('-').map(Number);
+    return [{ month: m, year: y }];
+  }
+  /** @type {Map<string, { month: number, year: number }>} */
+  const found = new Map();
+  for (let k = -1; k <= 2; k++) {
+    const target = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + k, 1));
+    const ty = target.getUTCFullYear();
+    const tm = target.getUTCMonth() + 1;
+    const key = `${ty}-${String(tm).padStart(2, '0')}`;
+    for (const delta of [-1, 0, 1]) {
+      const d = new Date(Date.UTC(ty, tm - 1 + delta, 1));
+      const y = d.getUTCFullYear();
+      const m = d.getUTCMonth() + 1;
+      if (first.month !== null && first.month !== m) continue;
+      if (first.day > daysInMonth(y, m)) continue;
+      const iso = toIso(y, m, first.day);
+      if (weekdayIndex(iso) !== first.weekday) continue;
+      if (majorityMonth(iso, count) === key) found.set(key, { month: tm, year: ty });
+    }
+  }
+  return [...found.values()];
+}
+
 /* ------------------------------------------------------------------ */
 /* Planning d'une feuille                                              */
 /* ------------------------------------------------------------------ */
@@ -370,10 +419,26 @@ function parseSheet(ws, sheetName, options) {
     }
   }
   if (!titleInfo) {
-    fail('Titre introuvable : aucune cellule n’indique le mois (par exemple « PLANNING OCTOBRE 2026 »).');
-    return result;
+    // Dernier recours : le mois se déduit des jours, s'il n'y a qu'une possibilité autour d'aujourd'hui
+    const daysCount = headers.reduce((n, h) => n + h.cols.length, 0);
+    const possible = monthsFromDays(headers[0].cols[0], daysCount, now);
+    const howTo = 'Ajoutez en haut de la feuille un titre avec le mois et l’année (par exemple « PLANNING DÉCEMBRE 2026 »), ou mettez le mois dans le nom du fichier.';
+    if (possible.length === 1) {
+      titleInfo = { ...possible[0], text: '', from: 'jours' };
+    } else if (possible.length > 1) {
+      const list = possible.map((p) => monthLabel(`${p.year}-${String(p.month).padStart(2, '0')}`)).join(' ou ');
+      fail(`Mois impossible à déterminer : aucun titre n’indique le mois, et les jours du planning peuvent correspondre à ${list}. ${howTo}`);
+      return result;
+    } else {
+      fail(`Titre introuvable : aucune cellule n’indique le mois, et les jours ne correspondent à aucun mois proche. ${howTo}`);
+      return result;
+    }
   }
   result.title = titleInfo.text.replace(/\s+/g, ' ');
+  if (titleInfo.from === 'jours') {
+    const label = monthLabel(`${titleInfo.year}-${String(titleInfo.month).padStart(2, '0')}`);
+    warn(`Aucun titre, aucun onglet ni nom de fichier n’indique le mois : ${label} a été déduit des jours du planning. Vérifiez-le, et ajoutez un titre (par exemple « PLANNING ${label.toUpperCase()} ») pour éviter toute erreur.`);
+  }
   if (titleInfo.from === 'onglet') warn(`Le titre de la feuille n’indique pas le mois : il a été lu dans le nom de l’onglet (« ${sheetName} »).`);
   if (titleInfo.from === 'fichier') warn(`Le titre de la feuille n’indique pas le mois : il a été lu dans le nom du fichier (« ${source} »).`);
 
