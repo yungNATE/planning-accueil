@@ -10,6 +10,8 @@
   --teal-ink: #ffffff;
   --teal-soft: #d3e7e3;
   --focus: #b3530f;
+  --danger: #b42318;
+  --danger-ink: #ffffff;
   --radius-lg: 14px;
   --radius-sm: 8px;
   --font: "Segoe UI Variable Text", "SF Pro Text", -apple-system, system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -27,6 +29,8 @@
     --teal-ink: #0b1a1c;
     --teal-soft: #1f3c3d;
     --focus: #ffb37a;
+    --danger: #ff9b8f;
+    --danger-ink: #2a0b08;
   }
 }
 
@@ -555,3 +559,52 @@ code {
 .file-card__status:empty { display: none; }
 
 .preview > .notice { margin-top: 1.25rem; }
+
+/* Suppression d'un mois */
+
+.delete-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.delete-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.6rem 0.6rem 0.6rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.delete-item__name { font-weight: 650; }
+
+.delete-item--confirm { border-color: var(--danger); }
+
+.delete-item__question { margin: 0; font-weight: 600; }
+
+.delete-item__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+.button-danger {
+  flex: none;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--danger);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.button-danger[data-confirm] { background: var(--danger); color: var(--danger-ink); }
+
+.button-danger:disabled,
+.button-secondary:disabled { opacity: 0.55; cursor: not-allowed; }

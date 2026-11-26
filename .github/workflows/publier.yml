@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'plannings/**'
+      - 'demandes/**'
       - 'src/**'
       - 'site/**'
       - 'config/**'
@@ -17,6 +18,10 @@ on:
     inputs:
       fichier:
         description: 'Nom du fichier à retraiter dans plannings/ (laisser vide pour retraiter tous les plannings)'
+        required: false
+        default: ''
+      supprimer:
+        description: 'Mois à supprimer, au format AAAA-MM (par exemple 2026-10). Si rempli, rien d’autre n’est retraité.'
         required: false
         default: ''
 
@@ -66,9 +71,12 @@ jobs:
           EVENEMENT: ${{ github.event_name }}
           AVANT: ${{ github.event.before }}
           FICHIER: ${{ inputs.fichier }}
+          SUPPRIMER: ${{ inputs.supprimer }}
         run: |
           if [ "$EVENEMENT" = "workflow_dispatch" ]; then
-            if [ -n "$FICHIER" ]; then
+            if [ -n "$SUPPRIMER" ]; then
+              node src/process.js --delete "$SUPPRIMER"
+            elif [ -n "$FICHIER" ]; then
               node src/process.js --file "$FICHIER"
             else
               node src/process.js --all
@@ -81,19 +89,22 @@ jobs:
       - name: Enregistrer les fichiers générés
         env:
           MOIS: ${{ steps.conversion.outputs.months }}
+          SUPPRIMES: ${{ steps.conversion.outputs.deleted }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public data
+          # Dossiers éventuellement vides ou disparus (dernier planning supprimé…) : on n'ajoute que ce qui existe ou est suivi
+          for chemin in public data plannings demandes; do
+            if [ -e "$chemin" ] || git ls-files --error-unmatch "$chemin" >/dev/null 2>&1; then git add -A "$chemin"; fi
+          done
           if git diff --cached --quiet; then
             echo "Aucun fichier généré à enregistrer."
             exit 0
           fi
-          if [ -n "$MOIS" ]; then
-            git commit -m "Planning $MOIS généré"
-          else
-            git commit -m "Page des plannings régénérée"
-          fi
+          MESSAGE=""
+          if [ -n "$MOIS" ]; then MESSAGE="Planning $MOIS généré"; fi
+          if [ -n "$SUPPRIMES" ]; then MESSAGE="${MESSAGE:+$MESSAGE ; }Planning $SUPPRIMES supprimé"; fi
+          git commit -m "${MESSAGE:-Page des plannings régénérée}"
           git pull --rebase origin main
           git push origin HEAD:main
 

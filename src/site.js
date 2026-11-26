@@ -198,7 +198,7 @@ export function renderIndex(manifest, settings = {}) {
 
     <footer class="footer">
       <p>${updated ? `Dernière mise à jour le ${esc(updated)}.` : ''}</p>
-      <p><a href="ajouter.html">Ajouter un planning</a></p>
+      <p><a href="ajouter.html">Ajouter ou supprimer un planning</a></p>
     </footer>
   </main>
 ${dialogs}
@@ -229,7 +229,7 @@ export function renderUpload(manifest, settings = {}, aliases = {}) {
   <meta name="color-scheme" content="light dark">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ${esc(serviceOrigin)}; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
-  <title>Ajouter un planning – Plannings de l’accueil</title>
+  <title>Ajouter ou supprimer un planning – Plannings de l’accueil</title>
   <link rel="icon" href="${FAVICON}">
   <link rel="stylesheet" href="assets/styles.css">
   <script type="module" src="assets/upload.js"></script>
@@ -238,7 +238,7 @@ export function renderUpload(manifest, settings = {}, aliases = {}) {
   <main class="page" data-upload data-service="${esc(service)}" data-repo="${esc(repo)}" data-published="${esc(JSON.stringify(published))}" data-aliases="${esc(JSON.stringify(aliases))}">
     <p class="back"><a href="./">Retour aux plannings</a></p>
     <header class="intro">
-      <h1>Ajouter un planning</h1>
+      <h1>Ajouter ou supprimer un planning</h1>
       <p>Choisissez le fichier Excel du mois (ou plusieurs) : il est vérifié ici, puis mis en ligne. Les agendas de chacun sont prêts dans la minute qui suit.</p>
     </header>
 
@@ -276,8 +276,25 @@ export function renderUpload(manifest, settings = {}, aliases = {}) {
         <button type="button" class="button-primary" data-publish>Publier</button>
       </p>
       <div class="status" role="status" data-status></div>
-      <p class="token-info" data-token-info hidden>Mot de passe mémorisé sur cet appareil. <button type="button" class="link-button" data-forget>Oublier le mot de passe</button></p>
     </section>
+
+    <section class="step" id="etape-suppression" aria-labelledby="titre-suppression" hidden>
+      <h2 id="titre-suppression">Supprimer un mois publié</h2>
+      <p>Retire du site le planning du mois : son fichier Excel, les agendas du mois et ses jours dans les abonnements. Les agendas déjà téléchargés par chacun ne sont pas modifiés.</p>
+      <ul class="delete-list" role="list" data-delete-list>${manifest.months.map((m) => {
+    const label = m.label ?? monthLabel(m.month);
+    return `
+        <li class="delete-item" data-month="${esc(m.month)}">
+          <span class="delete-item__name">${esc(capitalize(label))}</span>
+          <button type="button" class="button-danger" data-delete="${esc(m.month)}">Supprimer<span class="visually-hidden"> le planning ${esc(ofMonth(label))}</span></button>
+        </li>`;
+  }).join('')}
+      </ul>
+      <p class="empty" data-delete-empty${manifest.months.length ? ' hidden' : ''}>Aucun planning publié.</p>
+      <div class="status" role="status" data-delete-status></div>
+    </section>
+
+    <p class="token-info" data-token-info hidden>Mot de passe mémorisé sur cet appareil. <button type="button" class="link-button" data-forget>Oublier le mot de passe</button></p>
   </main>
 </body>
 </html>

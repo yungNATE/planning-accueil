@@ -4,6 +4,8 @@
 // 2. Les fichiers valides sont envoyés un par un au service de dépôt (fonction Netlify) avec le mot de passe ;
 //    le service garde la clé GitHub et les enregistre dans plannings/.
 // 3. La page suit la publication déclenchée par le dernier envoi : elle traite tous les fichiers en attente.
+// 4. La suppression d'un mois dépose une demande via le service ; la publication retire ensuite le fichier Excel,
+//    les données et les agendas du mois.
 
 const root = document.querySelector('[data-upload]');
 const SERVICE = root.dataset.service;
@@ -29,6 +31,10 @@ const publishRow = $('[data-publish-row]');
 const publishButton = $('[data-publish]');
 const statusBox = $('[data-status]');
 const passwordInfo = $('[data-token-info]');
+const stepDelete = $('#etape-suppression');
+const deleteList = $('[data-delete-list]');
+const deleteEmpty = $('[data-delete-empty]');
+const deleteStatus = $('[data-delete-status]');
 
 /* ------------------------------------------------------------------ */
 /* Outils                                                              */
@@ -55,10 +61,11 @@ function fetchWithin(url, options, ms) {
   return fetch(url, { ...options, ...(signal ? { signal } : {}) });
 }
 
-function setStatus(kind, ...content) {
-  statusBox.className = `status${kind ? ` notice notice--${kind}` : ''}`;
-  statusBox.replaceChildren(...content);
+function setStatusOf(box, kind, ...content) {
+  box.className = `status${kind ? ` notice notice--${kind}` : ''}`;
+  box.replaceChildren(...content);
 }
+const setStatus = (kind, ...content) => setStatusOf(statusBox, kind, ...content);
 
 /* ------------------------------------------------------------------ */
 /* Mot de passe                                                        */
@@ -108,6 +115,7 @@ const UNREACHABLE = 'Le service de dépôt ne répond pas. Vérifiez la connexio
 function showStep() {
   stepPassword.hidden = Boolean(password);
   stepFile.hidden = !password;
+  stepDelete.hidden = !password;
   passwordInfo.hidden = !password;
 }
 
@@ -192,6 +200,7 @@ fetchWithin('manifest.json', { cache: 'no-store' }, 10000)
   .then(async (manifest) => {
     if (!manifest) return;
     for (const m of manifest.months ?? []) PUBLISHED.add(m.month);
+    renderDeleteList(manifest.months ?? []);
     const { nameKey } = await import('./lib/names.js');
     const byKey = new Map();
     for (const m of manifest.months ?? []) for (const e of m.employees ?? []) byKey.set(nameKey(e.name), e.name);
@@ -352,6 +361,37 @@ function toBase64(buffer) {
   return btoa(binary);
 }
 
+/**
+ * Suit la publication déclenchée par un commit jusqu'à la mise en ligne.
+ * @param {string} sha
+ * @param {(etat: string) => void} onChange appelé à chaque changement d'état (file, en-cours…)
+ * @param {() => boolean} [cancelled]
+ * @returns {Promise<{ etat: 'publie' | 'echec' | 'delai' | 'annule', lien?: string }>}
+ */
+async function follow(sha, onChange, cancelled = () => false) {
+  const started = Date.now();
+  let last = '';
+  while (Date.now() - started < FOLLOW_LIMIT_MS) {
+    await sleep(POLL_MS);
+    if (cancelled()) return { etat: 'annule' };
+    let result;
+    try {
+      result = await service('suivi', { sha }, 15000);
+    } catch {
+      continue;
+    }
+    if (cancelled()) return { etat: 'annule' };
+    if (!result.ok) continue;
+    const { etat, lien } = result.data;
+    if (etat !== last) {
+      last = etat;
+      onChange(etat);
+    }
+    if (etat === 'publie' || etat === 'echec') return { etat, lien };
+  }
+  return { etat: 'delai' };
+}
+
 /** Avertit avant de quitter la page tant qu'un envoi n'est pas confirmé */
 const guardLeave = (event) => {
   event.preventDefault();
@@ -436,44 +476,137 @@ publishButton.addEventListener('click', async () => {
 
   // La publication déclenchée par le dernier envoi traite tous les fichiers en attente
   const { sha } = sent[sent.length - 1];
-  const started = Date.now();
-  let lastState = '';
-  while (Date.now() - started < FOLLOW_LIMIT_MS) {
-    await sleep(POLL_MS);
-    if (myGeneration !== generation) return; // autres fichiers choisis entre-temps
-    let follow;
-    try {
-      follow = await service('suivi', { sha }, 15000);
-    } catch {
-      continue;
-    }
-    if (!follow.ok) continue;
-    const { etat, lien } = follow.data;
-    if (etat === 'file' && lastState !== 'file') {
-      setStatus('progress', `En attente de la fin d’une autre publication, puis mise en ligne…${partNote}`);
-    } else if (etat === 'en-cours' && lastState !== 'en-cours') {
-      setStatus('progress', `Génération des agendas et mise en ligne en cours…${partNote}`);
-    }
-    lastState = etat;
-    if (myGeneration !== generation) return;
-    if (etat === 'publie') {
-      for (const p of ready.flatMap((i) => i.plannings)) PUBLISHED.add(p.month);
-      setStatus('success',
-        `${what} ${labels.length > 1 ? 'publiés' : 'publié'}. `,
-        link('./', 'Voir les plannings'),
-        ` (si le mois n’apparaît pas encore, rechargez la page dans quelques minutes).${partNote}`);
-      return;
-    }
-    if (etat === 'echec') {
-      setStatus('error',
-        'Les fichiers sont bien enregistrés, mais la mise en ligne a échoué. Prévenez la personne qui gère l’outil (',
-        link(lien, 'détail de l’erreur'),
-        ').');
-      return;
-    }
+  const outcome = await follow(sha, (etat) => {
+    if (etat === 'file') setStatus('progress', `En attente de la fin d’une autre publication, puis mise en ligne…${partNote}`);
+    if (etat === 'en-cours') setStatus('progress', `Génération des agendas et mise en ligne en cours…${partNote}`);
+  }, () => myGeneration !== generation);
+  if (outcome.etat === 'annule') return;
+  if (outcome.etat === 'publie') {
+    for (const p of ready.flatMap((i) => i.plannings)) PUBLISHED.add(p.month);
+    addToDeleteList(ready.flatMap((i) => i.plannings).map((p) => p.month), lib);
+    setStatus('success',
+      `${what} ${labels.length > 1 ? 'publiés' : 'publié'}. `,
+      link('./', 'Voir les plannings'),
+      ` (si le mois n’apparaît pas encore, rechargez la page dans quelques minutes).${partNote}`);
+  } else if (outcome.etat === 'echec') {
+    setStatus('error',
+      'Les fichiers sont bien enregistrés, mais la mise en ligne a échoué. Prévenez la personne qui gère l’outil (',
+      link(outcome.lien, 'détail de l’erreur'),
+      ').');
+  } else {
+    setStatus('warning', 'Les fichiers sont enregistrés, mais la mise en ligne n’est pas encore terminée. Revenez sur la page des plannings dans quelques minutes.');
   }
-  if (myGeneration !== generation) return;
-  setStatus('warning', 'Les fichiers sont enregistrés, mais la mise en ligne n’est pas encore terminée. Revenez sur la page des plannings dans quelques minutes.');
+});
+
+/* ------------------------------------------------------------------ */
+/* Suppression d'un mois                                               */
+/* ------------------------------------------------------------------ */
+
+const MONTH_NAMES = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const labelOf = (month) => `${MONTH_NAMES[Number(month.slice(5)) - 1]} ${month.slice(0, 4)}`;
+const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+let deleting = false;
+
+function deleteItem(month) {
+  const label = labelOf(month);
+  const button = el('button', { type: 'button', class: 'button-danger', 'data-delete': month }, 'Supprimer', el('span', { class: 'visually-hidden' }, ` le planning ${ofMonth(label)}`));
+  return el('li', { class: 'delete-item', 'data-month': month }, el('span', { class: 'delete-item__name' }, capital(label)), button);
+}
+
+/** Liste des mois publiés, du plus récent au plus ancien */
+function renderDeleteList(months) {
+  if (deleting) return;
+  const keys = [...new Set(months.map((m) => (typeof m === 'string' ? m : m.month)))].sort().reverse();
+  deleteList.replaceChildren(...keys.map(deleteItem));
+  deleteEmpty.hidden = keys.length > 0;
+}
+
+function addToDeleteList(months) {
+  const current = [...deleteList.querySelectorAll('[data-month]')].map((li) => li.dataset.month);
+  renderDeleteList([...current, ...months]);
+}
+
+/** Remet la ligne dans son état normal */
+function restoreItem(li) {
+  const fresh = deleteItem(li.dataset.month);
+  li.replaceWith(fresh);
+  fresh.querySelector('[data-delete]')?.focus();
+}
+
+deleteList.addEventListener('click', async (event) => {
+  const target = event.target instanceof Element ? event.target.closest('button') : null;
+  if (!target || deleting) return;
+  const li = target.closest('.delete-item');
+  const month = li?.dataset.month;
+  if (!month) return;
+  const label = labelOf(month);
+
+  // 1er clic : demande de confirmation dans la ligne
+  if (target.matches('[data-delete]')) {
+    const confirm = el('button', { type: 'button', class: 'button-danger', 'data-confirm': month }, 'Confirmer la suppression');
+    const cancel = el('button', { type: 'button', class: 'button-secondary', 'data-cancel': month }, 'Annuler');
+    li.replaceChildren(
+      el('p', { class: 'delete-item__question' }, `Supprimer définitivement le planning ${ofMonth(label)} ?`),
+      el('span', { class: 'delete-item__actions' }, confirm, cancel),
+    );
+    li.classList.add('delete-item--confirm');
+    confirm.focus();
+    return;
+  }
+  if (target.matches('[data-cancel]')) {
+    restoreItem(li);
+    return;
+  }
+  if (!target.matches('[data-confirm]')) return;
+
+  // Confirmation : demande envoyée, puis suivi jusqu'à la mise en ligne
+  deleting = true;
+  for (const button of li.querySelectorAll('button')) button.disabled = true;
+  setStatusOf(deleteStatus, '', `Suppression du planning ${ofMonth(label)} demandée…`);
+  let result;
+  try {
+    result = await service('supprimer', { mois: month }, 30000);
+  } catch {
+    result = null;
+  }
+  if (!result?.ok) {
+    deleting = false;
+    const { erreur, message } = result?.data ?? {};
+    if (erreur === 'mot-de-passe') {
+      forgetPassword();
+      password = '';
+      showStep();
+      askPassword('Le mot de passe a changé : saisissez le nouveau, puis recommencez.');
+      return;
+    }
+    restoreItem(li);
+    setStatusOf(deleteStatus, 'error', !result
+      ? UNREACHABLE
+      : SERVICE_PROBLEMS.includes(erreur)
+        ? `${message} Prévenez la personne qui gère l’outil.`
+        : message || `Le service de dépôt a renvoyé une erreur (${result.status}).`);
+    return;
+  }
+  setStatusOf(deleteStatus, 'progress', `Suppression du planning ${ofMonth(label)} en cours, environ une minute…`);
+  const outcome = await follow(result.data.sha, (etat) => {
+    if (etat === 'file') setStatusOf(deleteStatus, 'progress', 'En attente de la fin d’une autre publication…');
+    if (etat === 'en-cours') setStatusOf(deleteStatus, 'progress', `Suppression du planning ${ofMonth(label)} en cours…`);
+  });
+  deleting = false;
+  if (outcome.etat === 'publie') {
+    PUBLISHED.delete(month);
+    li.remove();
+    deleteEmpty.hidden = deleteList.children.length > 0;
+    setStatusOf(deleteStatus, 'success', `Planning ${ofMonth(label)} supprimé. `, link('./', 'Voir les plannings'), ' (si le mois apparaît encore, rechargez la page dans quelques minutes).');
+    deleteStatus.setAttribute('tabindex', '-1');
+    deleteStatus.focus();
+  } else if (outcome.etat === 'echec') {
+    restoreItem(li);
+    setStatusOf(deleteStatus, 'error', 'La suppression est enregistrée, mais la mise en ligne a échoué. Prévenez la personne qui gère l’outil (', link(outcome.lien, 'détail de l’erreur'), ').');
+  } else {
+    li.remove();
+    setStatusOf(deleteStatus, 'warning', 'La suppression est enregistrée, mais la mise en ligne n’est pas encore terminée. Revenez sur la page des plannings dans quelques minutes.');
+  }
 });
 
 showStep();

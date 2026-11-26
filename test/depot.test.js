@@ -41,7 +41,7 @@ const post = (route, body, origin = 'https://yungnate.github.io') => handler(new
 }));
 
 test('routes déclarées', () => {
-  assert.deepEqual(config.path, ['/api/verifier', '/api/deposer', '/api/suivi']);
+  assert.deepEqual(config.path, ['/api/verifier', '/api/deposer', '/api/supprimer', '/api/suivi']);
 });
 
 test('pré-vérification CORS limitée au site des plannings', async () => {
@@ -197,4 +197,23 @@ test('GitHub qui ne répond pas : message réseau, pas de plantage', async () =>
 
 test('limitation des appels en rafale déclarée pour Netlify', () => {
   assert.deepEqual(config.rateLimit, { windowLimit: 40, windowSize: 60, aggregateBy: ['ip', 'domain'] });
+});
+
+test('suppression : une demande est déposée dans demandes/, avec la clé du service', async () => {
+  github = (url, init) => (init.method === 'PUT' ? Response.json({ commit: { sha: '9'.repeat(40) } }, { status: 201 }) : Response.json({}, { status: 404 }));
+  const res = await post('supprimer', { motDePasse: 'Jardin Lune 42', mois: '2026-10' });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { sha: '9'.repeat(40) });
+  const put = calls.find((c) => c.method === 'PUT');
+  assert.equal(put.url, 'https://api.github.com/repos/yungNATE/planning-accueil/contents/demandes/supprimer-2026-10.json');
+  assert.equal(put.body.message, 'Suppression du planning octobre 2026 demandée depuis le site');
+  assert.equal(JSON.parse(Buffer.from(put.body.content, 'base64').toString()).mois, '2026-10');
+  assert.equal(put.auth, 'Bearer github_pat_service');
+});
+
+test('suppression : mois invalide ou mot de passe faux refusés sans appel à GitHub', async () => {
+  assert.equal((await post('supprimer', { motDePasse: 'Jardin Lune 42', mois: '2026-13' })).status, 400);
+  assert.equal((await post('supprimer', { motDePasse: 'Jardin Lune 42', mois: '../../x' })).status, 400);
+  assert.equal((await post('supprimer', { motDePasse: 'faux', mois: '2026-10' })).status, 401);
+  assert.equal(calls.length, 0);
 });

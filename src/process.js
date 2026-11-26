@@ -7,6 +7,10 @@
  *   node src/process.js --file <nom>      un fichier précis (plusieurs --file possibles)
  *   node src/process.js --all             tous les plannings du dossier plannings/
  *   node src/process.js --site-only       aucun planning, page et abonnements régénérés
+ *   node src/process.js --delete <AAAA-MM>  supprime un mois : fichiers Excel, données, agendas, abonnements
+ *
+ * Une demande de suppression peut aussi être déposée dans le dépôt : demandes/supprimer-AAAA-MM.json
+ * (c'est ce que fait le service de dépôt). Elle est traitée à son tour, dans l'ordre des dépôts, puis retirée.
  *
  * Chaque planning traité (un par onglet) remplace entièrement les données de son mois (data/<AAAA-MM>.json).
  * Les données des autres mois ne sont jamais réécrites. Les agendas (mensuels et d'abonnement), le manifeste
@@ -20,7 +24,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as XLSXModule from 'xlsx';
-import { parseWorkbook } from './parse-planning.js';
+import { monthFromFileName, parseWorkbook } from './parse-planning.js';
 import { nameKey } from './names.js';
 import { buildCalendar, employeeEvents } from './ics.js';
 import { renderIndex, renderUpload } from './site.js';
@@ -43,6 +47,17 @@ function sheetjsDir() {
 
 /** Formats lus : Excel récent (.xlsx, .xlsm), ancien Excel (.xls), LibreOffice (.ods). */
 export const isPlanningFile = (/** @type {string} */ file) => /\.(xlsx|xlsm|xls|ods)$/i.test(file) && !path.basename(file).startsWith('~$');
+
+/** Demande de suppression d'un mois déposée dans le dépôt */
+export const isDeletionRequest = (/** @type {string} */ file) => /^demandes[\\/]supprimer-\d{4}-\d{2}\.json$/.test(file);
+const requestMonth = (/** @type {string} */ file) => /(\d{4}-\d{2})\.json$/.exec(file)?.[1] ?? '';
+
+/** @param {string} root */
+export function allDeletionRequests(root) {
+  const dir = path.join(root, 'demandes');
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).map((f) => path.join('demandes', f)).filter(isDeletionRequest).sort();
+}
 
 /** Erreur de lecture SheetJS → message compréhensible */
 function readErrorMessage(/** @type {Error} */ error) {
@@ -79,7 +94,7 @@ function commitExists(root, sha) {
 }
 
 /**
- * Plannings ajoutés, modifiés ou renommés depuis un commit, dans l'ordre chronologique de leur dernier
+ * Plannings et demandes de suppression ajoutés, modifiés ou renommés depuis un commit, dans l'ordre chronologique de leur dernier
  * changement : si deux fichiers du même mois arrivent dans la même fournée, le plus récent l'emporte.
  * files = null : point de départ inconnu, tout retraiter.
  * @param {string} root
@@ -89,7 +104,7 @@ function commitExists(root, sha) {
 export function pendingPlannings(root, since) {
   const head = git(root, ['rev-parse', 'HEAD']).trim();
   if (!commitExists(root, since)) return { files: null, head };
-  const out = git(root, ['-c', 'core.quotepath=false', 'log', '--reverse', '--format=@%H', '--name-only', '--diff-filter=AMR', `${since}..HEAD`, '--', 'plannings']);
+  const out = git(root, ['-c', 'core.quotepath=false', 'log', '--reverse', '--format=@%H', '--name-only', '--diff-filter=AMR', `${since}..HEAD`, '--', 'plannings', 'demandes']);
   /** @type {Map<string, true>} */
   const order = new Map();
   for (const line of out.split('\n')) {
@@ -98,7 +113,7 @@ export function pendingPlannings(root, since) {
     order.delete(file);
     order.set(file, true);
   }
-  const files = [...order.keys()].filter(isPlanningFile).filter((f) => existsSync(path.join(root, f)));
+  const files = [...order.keys()].filter((f) => isPlanningFile(f) || isDeletionRequest(f)).filter((f) => existsSync(path.join(root, f)));
   return { files, head };
 }
 
@@ -142,11 +157,13 @@ export function allPlannings(root) {
 /**
  * @typedef {import('./parse-planning.js').Issue} Issue
  * @typedef {{ file: string, month: string, start: string, end: string, employees: { name: string, slotCount: number }[], warnings: Issue[], errors: Issue[] }} FileReport
- * @typedef {{ files: FileReport[], overlaps: { months: string[], days: string[] }[], processedMonths: string[], failed: boolean }} Report
+ * @typedef {{ month: string, removed: string[] }} Deletion
+ * @typedef {{ files: FileReport[], overlaps: { months: string[], days: string[] }[], processedMonths: string[], deleted: Deletion[], failed: boolean }} Report
  */
 
 /**
- * @param {{ root: string, files?: string[], all?: boolean, now?: Date }} options
+ * @param {{ root: string, files?: string[], all?: boolean, deleteMonths?: string[], now?: Date }} options
+ *   files : plannings et demandes de suppression, traités dans cet ordre ; deleteMonths : suppressions directes
  * @returns {Report}
  */
 export function runProcess(options) {
@@ -158,9 +175,35 @@ export function runProcess(options) {
   const aliases = readJson(path.join(root, 'config', 'aliases.json'), {});
   const now = (options.now ?? new Date()).toISOString();
 
-  const files = options.all ? allPlannings(root) : (options.files ?? []);
+  // Tout retraiter : les plannings, puis les demandes de suppression restées en attente (la suppression l'emporte)
+  const files = options.all ? [...allPlannings(root), ...allDeletionRequests(root)] : (options.files ?? []);
   /** @type {Report} */
-  const report = { files: [], overlaps: [], processedMonths: [], failed: false };
+  const report = { files: [], overlaps: [], processedMonths: [], deleted: [], failed: false };
+
+  /**
+   * Supprime un mois : données, et fichiers Excel de ce mois (sauf ceux déposés après la demande, à traiter ensuite).
+   * @param {string} month « AAAA-MM »
+   * @param {Set<string>} keep fichiers à conserver
+   */
+  const deleteMonth = (month, keep) => {
+    /** @type {string[]} */
+    const removed = [];
+    const dataFile = path.join(dataDir, `${month}.json`);
+    let source = '';
+    if (existsSync(dataFile)) {
+      try { source = readJson(dataFile, {}).source ?? ''; } catch { /* données illisibles : supprimées quand même */ }
+      rmSync(dataFile);
+      removed.push(`data/${month}.json`);
+    }
+    for (const file of allPlannings(root)) {
+      if (keep.has(path.normalize(file))) continue;
+      if (planningMonthOf(root, file, source) !== month) continue;
+      rmSync(path.join(root, file));
+      removed.push(file);
+    }
+    report.deleted.push({ month, removed });
+  };
+
 
   /** @returns {any[]} données de tous les mois publiés ; un fichier illisible est signalé et ignoré */
   const loadData = () => (existsSync(dataDir) ? readdirSync(dataDir) : [])
@@ -185,8 +228,21 @@ export function runProcess(options) {
   for (const d of loadData()) for (const e of d.employees) known.set(e.key ?? nameKey(e.name), e.name);
   report.files = [];
 
+  // Suppressions demandées directement (--delete)
+  for (const month of options.deleteMonths ?? []) {
+    if (/^\d{4}-\d{2}$/.test(month)) deleteMonth(month, new Set());
+    else report.files.push({ file: month, month: '', start: '', end: '', employees: [], warnings: [], errors: [{ message: `Mois à supprimer invalide « ${month} » : utilisez le format AAAA-MM, par exemple 2026-10.` }] });
+  }
+
   /* 1. Plannings déposés : chaque planning (un par onglet) remplace entièrement son mois */
-  for (const file of files) {
+  for (const [index, file] of files.entries()) {
+    if (isDeletionRequest(path.normalize(file))) {
+      const month = requestMonth(file);
+      const later = new Set(files.slice(index + 1).map((f) => path.normalize(f)));
+      deleteMonth(month, later);
+      rmSync(path.join(root, file), { force: true });
+      continue;
+    }
     let abs = path.resolve(root, file);
     if (!existsSync(abs) && existsSync(path.join(root, 'plannings', file))) abs = path.join(root, 'plannings', file);
     const rel = path.relative(root, abs);
@@ -354,12 +410,44 @@ export function runProcess(options) {
 }
 
 /**
+ * Mois (« AAAA-MM ») d'un fichier de planning : d'après son nom ; si le nom n'a pas d'année, d'après les données
+ * publiées (fichier source du mois) ou, à défaut, en lisant le fichier.
+ * @param {string} root
+ * @param {string} file chemin relatif (plannings/…)
+ * @param {string} knownSource nom du fichier source enregistré pour le mois concerné
+ */
+function planningMonthOf(root, file, knownSource) {
+  const fromName = monthFromFileName(path.basename(file));
+  if ('error' in fromName) return null;
+  const mm = String(fromName.month).padStart(2, '0');
+  if (fromName.year) return `${fromName.year}-${mm}`;
+  if (knownSource && path.basename(file) === knownSource && existsSync(path.join(root, 'data'))) {
+    const data = readdirSync(path.join(root, 'data')).filter((f) => f.endsWith(`-${mm}.json`));
+    for (const f of data) {
+      try { if (readJson(path.join(root, 'data', f), {}).source === knownSource) return f.slice(0, 7); } catch { /* ignoré */ }
+    }
+  }
+  try {
+    const workbook = XLSX.read(readFileSync(path.join(root, file)), { type: 'buffer', cellNF: true, cellStyles: true });
+    return parseWorkbook(workbook, { source: path.basename(file) }).plannings[0]?.month || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Résumé lisible (Markdown) pour le résumé d'exécution de l'Action.
  * @param {Report} report
  */
 export function formatReport(report) {
   const out = [];
-  if (!report.files.length) {
+  for (const d of report.deleted ?? []) {
+    out.push(`## 🗑️ ${monthLabel(d.month)} : supprimé`, '');
+    out.push(d.removed.length
+      ? `Retiré : ${d.removed.map((f) => `\`${f}\``).join(', ')}. Les agendas du mois et ses jours dans les abonnements ont été retirés du site.`
+      : 'Rien à supprimer : ce mois n’était pas publié.', '');
+  }
+  if (!report.files.length && !(report.deleted ?? []).length) {
     out.push('## Aucun planning à traiter', '', 'La page et les abonnements ont été régénérés à partir des plannings déjà publiés.');
   }
   for (const f of report.files) {
@@ -399,12 +487,15 @@ function main() {
   let siteOnly = false;
   /** @type {string | null} */
   let pending = null;
+  /** @type {string[]} */
+  const deleteMonths = [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--all') all = true;
     else if (arg === '--site-only') siteOnly = true;
     else if (arg === '--file') { if (args[i + 1]) files.push(args[++i]); }
     else if (arg === '--pending') pending = args[i + 1] && !args[i + 1].startsWith('--') ? args[++i] : '';
+    else if (arg === '--delete') { if (args[i + 1]) deleteMonths.push(args[++i].trim()); }
     else {
       console.error(`Option inconnue : ${arg}`);
       process.exit(2);
@@ -412,6 +503,7 @@ function main() {
   }
   let report;
   if (pending !== null) report = runPending({ root, fallbackSince: pending });
+  else if (deleteMonths.length) report = runProcess({ root, files: [], deleteMonths });
   else if (siteOnly) report = runProcess({ root, files: [] });
   else {
     report = runProcess({ root, files, all });
@@ -422,6 +514,7 @@ function main() {
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);
   if (process.env.GITHUB_OUTPUT) {
     appendFileSync(process.env.GITHUB_OUTPUT, `months=${report.processedMonths.join(', ')}\n`);
+    appendFileSync(process.env.GITHUB_OUTPUT, `deleted=${report.deleted.map((d) => d.month).join(', ')}\n`);
   }
   for (const f of report.files) {
     for (const e of f.errors) console.log(`::error title=${path.basename(f.file)}::${e.cell ? `${e.cell} : ` : ''}${e.message}`);

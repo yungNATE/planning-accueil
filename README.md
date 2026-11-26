@@ -43,6 +43,25 @@ Seul le fichier déposé est converti. Les mois déjà publiés ne sont pas modi
 
 Déposez la version corrigée, sous le même nom ou un autre (avec toujours le mois dans le nom). Ce mois est **entièrement remplacé** par cette nouvelle version (y compris si une personne a été retirée).
 
+## Supprimer un mois
+
+**Depuis le site** : sur la page https://yungnate.github.io/planning-accueil/ajouter.html (lien « Ajouter ou supprimer un planning » en bas de la page des plannings), section **Supprimer un mois publié**. Cliquez sur **Supprimer** à côté du mois, puis sur **Confirmer la suppression**. La page suit l’opération et confirme quand le mois a disparu du site, en général en moins d’une minute.
+
+**Depuis GitHub** : onglet **Actions**, workflow **Publier les plannings**, **Run workflow**, et indiquez le mois dans le champ « supprimer » au format `AAAA-MM` (par exemple `2026-10`).
+
+La suppression retire :
+
+- le ou les fichiers Excel de ce mois dans `plannings/` ;
+- ses données (`data/AAAA-MM.json`) et ses agendas mensuels ;
+- ses jours dans les agendas d’abonnement (les abonnés les voient disparaître au prochain rafraîchissement) ;
+- le mois de la page des plannings.
+
+Les agendas déjà téléchargés et importés par chacun ne peuvent pas être modifiés à distance. Rien n’est perdu pour autant : l’historique du dépôt garde tous les fichiers, et redéposer le fichier Excel republie le mois.
+
+Si une suppression et un nouveau fichier du même mois arrivent ensemble, l’ordre compte : supprimer puis déposer republie le mois avec le nouveau fichier ; déposer puis supprimer le retire.
+
+Supprimer à la main un fichier Excel dans `plannings/` sur GitHub ne retire pas le mois du site : utilisez l’un des deux moyens ci-dessus.
+
 ## Ce que l’outil lit dans le fichier
 
 Formats acceptés : `.xlsx` (et `.xlsm`), ancien Excel `.xls`, LibreOffice `.ods`. Un fichier protégé par un mot de passe doit être enregistré sans protection avant d’être déposé.
@@ -121,7 +140,7 @@ Après une modification de la configuration, retraitez tous les plannings (voir 
 - `src/ics.js` écrit les fichiers iCalendar (RFC 5545) avec le fuseau `Europe/Paris` : les horaires restent justes aux changements d’heure.
 - `src/process.js` traite les fichiers déposés, écrit `data/<AAAA-MM>.json` et `public/ics/<AAAA-MM>/<prénom>.ics`, puis reconstruit les abonnements `public/ics/<prénom>.ics`, le manifeste et les pages.
 - `site/upload.js` (page d’ajout) réutilise dans le navigateur `parse-planning.js`, `util.js`, `names.js` et SheetJS, copiés dans `public/assets/` à chaque publication, puis envoie le fichier au service de dépôt et suit l’exécution de l’Action.
-- `depot/netlify/functions/depot.mts` (service de dépôt) : routes `/api/verifier`, `/api/deposer` et `/api/suivi`, appels à l’API GitHub avec `GITHUB_TOKEN`, accès limité au site des plannings (CORS).
+- `depot/netlify/functions/depot.mts` (service de dépôt) : routes `/api/verifier`, `/api/deposer`, `/api/supprimer` et `/api/suivi`, appels à l’API GitHub avec `GITHUB_TOKEN`, accès limité au site des plannings (CORS). Une suppression dépose une demande `demandes/supprimer-AAAA-MM.json`, que la publication traite puis retire.
 - `.github/workflows/publier.yml` lance les tests, la conversion, enregistre les fichiers générés dans le dépôt, puis publie `public/` sur GitHub Pages.
 
 En local (Node 22 ou plus) :

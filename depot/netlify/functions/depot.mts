@@ -16,7 +16,11 @@
 // Routes (POST, JSON) :
 //   /api/verifier  { motDePasse }                          → { ok: true }
 //   /api/deposer   { motDePasse, nom, contenu, mois?, moisCles? }  → { sha, fichier }   contenu : fichier en base64
+//   /api/supprimer { motDePasse, mois }                    → { sha }      mois : « AAAA-MM »
 //   /api/suivi     { motDePasse, sha }                     → { etat: attente | file | en-cours | publie | echec, lien? }
+//
+// Une suppression dépose une demande (demandes/supprimer-AAAA-MM.json) : la publication retire ensuite le fichier
+// Excel, les données et les agendas du mois, puis la demande elle-même.
 
 import type { Config } from "@netlify/functions";
 import { createHash, timingSafeEqual } from "node:crypto";
@@ -129,6 +133,28 @@ function githubFailure(status: number, origin: string): Response {
   return fail(502, "github", `GitHub a renvoyé une erreur (${status}). Réessayez dans quelques instants.`, origin);
 }
 
+const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+
+/**
+ * Crée ou remplace un fichier du dépôt (un commit). Deux essais : si le fichier a changé entre la lecture
+ * et l'écriture (dépôts simultanés), on relit et on recommence.
+ */
+async function putFile(s: Settings, repoPath: string, base64: string, message: string): Promise<{ sha: string } | Response> {
+  const path = `/repos/${s.repo}/contents/${repoPath.split("/").map(encodeURIComponent).join("/")}`;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const existing = await github(s, `${path}?ref=${encodeURIComponent(s.branch)}`);
+    if (!existing.ok && existing.status !== 404) return githubFailure(existing.status, s.origin);
+    const sha = existing.ok ? ((await existing.json()) as { sha?: string }).sha : undefined;
+    const saved = await github(s, path, {
+      method: "PUT",
+      body: JSON.stringify({ message, content: base64, branch: s.branch, ...(sha ? { sha } : {}) }),
+    });
+    if (saved.ok) return { sha: ((await saved.json()) as { commit?: { sha?: string } }).commit?.sha ?? "" };
+    if (!(saved.status === 409 || saved.status === 422) || attempt === 2) return githubFailure(saved.status, s.origin);
+  }
+  return githubFailure(409, s.origin);
+}
+
 async function deposer(body: Body, s: Settings): Promise<Response> {
   const name = storedName(body.nom, body.moisCles);
   if (!name) {
@@ -141,29 +167,20 @@ async function deposer(body: Body, s: Settings): Promise<Response> {
   const ole = bytes.subarray(0, 4).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0]));
   if (!zip && !ole) return fail(400, "format", "Ce fichier n’est pas un classeur Excel ou LibreOffice.", s.origin);
   const label = typeof body.mois === "string" && /^[\p{L}\p{N} ,]{3,80}$/u.test(body.mois) ? body.mois : name;
-  const path = `/repos/${s.repo}/contents/plannings/${encodeURIComponent(name)}`;
 
-  // Deux essais : si le fichier a changé entre la lecture et l'écriture (dépôts simultanés), on relit et on recommence
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    const existing = await github(s, `${path}?ref=${encodeURIComponent(s.branch)}`);
-    if (!existing.ok && existing.status !== 404) return githubFailure(existing.status, s.origin);
-    const sha = existing.ok ? ((await existing.json()) as { sha?: string }).sha : undefined;
-    const saved = await github(s, path, {
-      method: "PUT",
-      body: JSON.stringify({
-        message: `Planning ${label} déposé depuis le site`,
-        content: bytes.toString("base64"),
-        branch: s.branch,
-        ...(sha ? { sha } : {}),
-      }),
-    });
-    if (saved.ok) {
-      const commit = ((await saved.json()) as { commit?: { sha?: string } }).commit;
-      return reply(200, { sha: commit?.sha ?? "", fichier: name }, s.origin);
-    }
-    if (!(saved.status === 409 || saved.status === 422) || attempt === 2) return githubFailure(saved.status, s.origin);
-  }
-  return githubFailure(409, s.origin);
+  const result = await putFile(s, `plannings/${name}`, bytes.toString("base64"), `Planning ${label} déposé depuis le site`);
+  if (result instanceof Response) return result;
+  return reply(200, { sha: result.sha, fichier: name }, s.origin);
+}
+
+async function supprimer(body: Body, s: Settings): Promise<Response> {
+  const mois = typeof body.mois === "string" ? body.mois.trim() : "";
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mois)) return fail(400, "mois", "Mois invalide : format attendu AAAA-MM.", s.origin);
+  const label = `${MONTHS_FR[Number(mois.slice(5)) - 1]} ${mois.slice(0, 4)}`;
+  const request = `${JSON.stringify({ mois, demandeLe: new Date().toISOString() }, null, 2)}\n`;
+  const result = await putFile(s, `demandes/supprimer-${mois}.json`, Buffer.from(request).toString("base64"), `Suppression du planning ${label} demandée depuis le site`);
+  if (result instanceof Response) return result;
+  return reply(200, { sha: result.sha }, s.origin);
 }
 
 async function runs(s: Settings, query: string): Promise<Run[] | Response> {
@@ -215,6 +232,7 @@ export default async (req: Request): Promise<Response> => {
   try {
     if (route === "verifier") return reply(200, { ok: true }, s.origin);
     if (route === "deposer") return await deposer(body, s);
+    if (route === "supprimer") return await supprimer(body, s);
     if (route === "suivi") return await suivi(body, s);
   } catch {
     return fail(502, "reseau", "GitHub ne répond pas. Réessayez dans quelques instants.", s.origin);
@@ -223,7 +241,7 @@ export default async (req: Request): Promise<Response> => {
 };
 
 export const config: Config = {
-  path: ["/api/verifier", "/api/deposer", "/api/suivi"],
+  path: ["/api/verifier", "/api/deposer", "/api/supprimer", "/api/suivi"],
   method: ["POST", "OPTIONS"],
   // Limite les essais de mot de passe en rafale ; un dépôt suivi jusqu'au bout fait une quinzaine d'appels
   rateLimit: { windowLimit: 40, windowSize: 60, aggregateBy: ["ip", "domain"] },

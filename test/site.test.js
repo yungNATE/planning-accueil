@@ -58,3 +58,14 @@ test('page des plannings : au-delà de six mois, les plus anciens sont repliés'
   assert.match(html, /class="fallback-wrap"/);
   assert.match(html, /HTMLDialogElement/);
 });
+
+test('page d’ajout : section de suppression avec un bouton par mois publié', () => {
+  const html = renderUpload(
+    { updatedAt: '', subscriptions: [], months: [{ month: '2026-11', label: 'novembre 2026' }, { month: '2026-10', label: 'octobre 2026' }] },
+    { serviceDepot: 'https://planning-accueil-depot.netlify.app' },
+  );
+  assert.match(html, /<h2 id="titre-suppression">Supprimer un mois publié<\/h2>/);
+  assert.match(html, /data-delete="2026-10">Supprimer<span class="visually-hidden"> le planning d’octobre 2026<\/span>/);
+  assert.match(html, /data-delete="2026-11">Supprimer<span class="visually-hidden"> le planning de novembre 2026<\/span>/);
+  assert.match(html, /<p class="empty" data-delete-empty hidden>/);
+});
