@@ -1,8 +1,13 @@
 // Plannings synthétiques : cas limites du parser.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCell, parsePlanning } from '../src/parse-planning.js';
-import { XLSX, buildPlanning, dayLabel, fill, roundTrip } from './helpers.js';
+import { parseCell, parsePlanning as parse } from '../src/parse-planning.js';
+import {
+  XLSX, buildPlanning, dayLabel, fill, roundTrip, sourceOf,
+} from './helpers.js';
+
+/** Le mois vient du nom du fichier : ici, celui du titre de la feuille de test */
+const parsePlanning = (wb, options = {}) => parse(wb, { source: sourceOf(wb), ...options });
 
 test('passage d’année : planning de décembre du lundi 30 novembre 2026 au dimanche 3 janvier 2027', () => {
   const wb = roundTrip(buildPlanning({
@@ -56,7 +61,7 @@ test('lecture des cases', () => {
 
 test('nom décalé d’une ligne sous des cases fusionnées verticalement', () => {
   const rows = [
-    ['', '', 'PLANNING OCTOBRE 2026'],
+    ['', '', 'PLANNING SEPTEMBRE 2026'],
     [],
     ['', 'JOURS', 'LUNDI 28', 'MARDI 29', 'MERCREDI 30'],
     ['', '', '8H-15H', 'RH', '15H-22H'],
@@ -74,7 +79,7 @@ test('nom décalé d’une ligne sous des cases fusionnées verticalement', () =
 
 test('horaires sans nom : erreur', () => {
   const rows = [
-    ['', '', 'PLANNING OCTOBRE 2026'],
+    ['', '', 'PLANNING SEPTEMBRE 2026'],
     ['', 'JOURS', 'LUNDI 28', 'MARDI 29', 'MERCREDI 30'],
     ['', '', '8H-15H', 'RH', '15H-22H'],
   ];
@@ -108,8 +113,8 @@ test('alias : un nom épinglé n’est pas rapproché automatiquement', () => {
   assert.deepEqual(pinned.employees.map((e) => e.name), ['Sylvain', 'Syvain']);
 });
 
-test('titre introuvable et jours loin d’aujourd’hui : erreur explicite', () => {
-  const p = parsePlanning(roundTrip(buildPlanning({ title: 'PLANNING ACCUEIL', start: '2026-09-28', weeks: 1, people: { ALICE: fill(7, 'RH') } })), { now: new Date('2026-05-15T12:00:00Z') });
+test('nom de fichier sans mois : erreur explicite', () => {
+  const p = parsePlanning(roundTrip(buildPlanning({ title: 'PLANNING ACCUEIL', start: '2026-09-28', weeks: 1, people: { ALICE: fill(7, 'RH') } })));
   assert.equal(p.ok, false);
-  assert.match(p.errors[0].message, /Titre introuvable/);
+  assert.match(p.errors[0].message, /« PLANNING ACCUEIL\.xlsx » n’indique pas le mois/);
 });

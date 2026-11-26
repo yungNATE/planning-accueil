@@ -84,3 +84,6 @@ export const serial = (/** @type {string} */ iso) => (Date.UTC(...(/** @type {[n
 
 /** n cases avec la même valeur */
 export const fill = (/** @type {number} */ n, /** @type {string} */ value) => Array.from({ length: n }, () => value);
+
+/** Nom de fichier d'un classeur de test, tiré du titre placé en C1 (le mois vient du nom du fichier) */
+export const sourceOf = (/** @type {any} */ wb) => `${wb.Sheets[wb.SheetNames[0]].C1?.v || 'planning'}.xlsx`;

@@ -23,7 +23,7 @@ Aucun compte GitHub ni aucune clé n’est nécessaire pour déposer : c’est l
 
 ### Depuis GitHub
 
-1. Ouvrez le dossier [`plannings`](plannings) du dépôt.
+1. Vérifiez que le **nom du fichier contient le mois** (par exemple « Planning décembre 2026.xlsx »), puis ouvrez le dossier [`plannings`](plannings) du dépôt.
 2. Cliquez sur **Add file**, puis **Upload files**, et déposez le fichier Excel (`.xlsx`).
 3. Cliquez sur **Commit changes**.
 
@@ -33,7 +33,7 @@ Seul le fichier déposé est converti. Les mois déjà publiés ne sont pas modi
 
 ## Classement des mois et dépôts successifs
 
-- Chaque fichier est rangé d’après le **mois de son titre**, jamais d’après son nom ni sa date de dépôt. La page affiche les mois du plus récent au plus ancien, le plus récent étant mis en avant : déposer décembre puis octobre donne bien « Décembre 2026 » en haut.
+- Chaque fichier est rangé d’après le **mois indiqué dans son nom**, jamais d’après sa date de dépôt. La page affiche les mois du plus récent au plus ancien, le plus récent étant mis en avant : déposer décembre puis octobre donne bien « Décembre 2026 » en haut.
 - **Plusieurs fichiers d’un coup** (plusieurs fichiers dans un même « Upload files » sur GitHub) : une seule publication les traite tous.
 - **Plusieurs dépôts d’affilée** (par exemple quatre fichiers envoyés l’un après l’autre depuis la page d’ajout) : chaque dépôt est mis en file d’attente et publié à son tour, environ 30 secondes chacun. Rien n’est perdu ni annulé.
 - Si deux fichiers du **même mois** arrivent, celui déposé **en dernier** fait foi.
@@ -41,13 +41,13 @@ Seul le fichier déposé est converti. Les mois déjà publiés ne sont pas modi
 
 ## Corriger un planning
 
-Déposez la version corrigée dans `plannings/`, sous le même nom ou un autre. Le mois indiqué dans son titre est **entièrement remplacé** par cette nouvelle version (y compris si une personne a été retirée).
+Déposez la version corrigée, sous le même nom ou un autre (avec toujours le mois dans le nom). Ce mois est **entièrement remplacé** par cette nouvelle version (y compris si une personne a été retirée).
 
 ## Ce que l’outil lit dans le fichier
 
 Formats acceptés : `.xlsx` (et `.xlsm`), ancien Excel `.xls`, LibreOffice `.ods`. Un fichier protégé par un mot de passe doit être enregistré sans protection avant d’être déposé.
 
-**Le mois.** Il est lu dans le titre de la feuille : `PLG ACCUEIL OCTOBRE 2026`, `Planning oct. 26`, `octobre 2026` saisi comme une date Excel… Si le titre ne l’indique pas, l’outil le cherche dans le nom de l’onglet, puis dans le nom du fichier (avec un avertissement). Sans année, celle-ci est déduite des jours de la semaine. En dernier recours (aucun titre, onglet « Feuil1 », fichier « Classeur1.xlsx »), le mois est déduit des jours eux-mêmes : seulement s’il n’y a qu’une possibilité entre le mois dernier et les deux prochains, avec un avertissement ; sinon le fichier est refusé et le message demande d’ajouter un titre. Des jours saisis comme vraies dates Excel donnent toujours le mois sans ambiguïté. Si le titre désigne un autre mois que celui qui occupe l’essentiel des jours, un avertissement le signale.
+**Le mois.** Il est lu **uniquement dans le nom du fichier**, quelles que soient la casse et les accents : `PLANNING_OCTOBRE_26.xlsx`, `planning décembre.xlsx`, `Planning oct. 26.xlsx`, `PLANNINGDECEMBRE2026.xlsx`. Le titre de la feuille et le nom des onglets ne sont pas utilisés. Si le nom n’indique pas l’année, elle est déduite des jours de la semaine. Un nom sans mois (`Classeur1.xlsx`) ou qui en cite plusieurs est refusé avec un message qui demande de renommer le fichier. Si aucun jour de la grille ne tombe dans le mois du nom, le fichier est refusé ; si seule une minorité des jours y tombe, un avertissement le signale.
 
 **Les jours.** Une ligne de jours par semaine : `LUNDI 28`, `JEUDI 1ER`, `Lun. 5`, `MARDI 29/09`, `MERCREDI 30 SEPTEMBRE`, ou de vraies dates Excel. Le planning peut déborder sur le mois précédent et le suivant : ces jours restent dans le planning du mois. Une dernière semaine incomplète est acceptée. Une semaine absente est signalée (ses jours ne sont dans aucun agenda) ; une semaine en double ou dans le désordre est une erreur.
 
@@ -59,7 +59,7 @@ Formats acceptés : `.xlsx` (et `.xlsm`), ancien Excel `.xls`, LibreOffice `.ods
 
 Si une case contient des chiffres mais pas un horaire reconnu (par exemple `15H30_23H`), la journée est comptée OFF **et un avertissement indique la case**, pour corriger le fichier.
 
-**Ce qui est ignoré**, comme à l’écran : les lignes, colonnes et onglets masqués. Un classeur qui contient plusieurs onglets de mois différents publie chacun de ces mois ; deux onglets pour le même mois sont une erreur.
+**Ce qui est ignoré**, comme à l’écran : les lignes, colonnes et onglets masqués. Si le classeur contient plusieurs onglets de planning, seul celui dont les jours correspondent le mieux au mois du nom est publié, avec un avertissement.
 
 ## S’abonner plutôt que télécharger chaque mois
 
@@ -74,7 +74,7 @@ Sur la page, le bouton **S’abonner** à côté d’un nom donne une adresse d�
 ## Si l’Action est en échec (croix rouge)
 
 1. Onglet **Actions**, cliquez sur l’exécution en échec.
-2. Le **résumé** en bas de page indique le fichier, la case et le problème (titre introuvable, jour incohérent, horaires sans prénom…).
+2. Le **résumé** en bas de page indique le fichier, la case et le problème (mois absent du nom du fichier, jour incohérent, horaires sans prénom…).
 3. Corrigez le fichier Excel et redéposez-le.
 
 Un fichier en erreur n’est pas publié, mais il ne bloque pas les autres : les mois déjà en ligne restent disponibles.
@@ -117,7 +117,7 @@ Après une modification de la configuration, retraitez tous les plannings (voir 
 
 ## Fonctionnement technique
 
-- `src/parse-planning.js` lit la grille Excel (SheetJS) sans coordonnées fixes : titre, lignes de jours, cellules fusionnées, prénoms, horaires.
+- `src/parse-planning.js` lit la grille Excel (SheetJS) sans coordonnées fixes : lignes de jours, cellules fusionnées, prénoms, horaires ; le mois vient du nom du fichier.
 - `src/ics.js` écrit les fichiers iCalendar (RFC 5545) avec le fuseau `Europe/Paris` : les horaires restent justes aux changements d’heure.
 - `src/process.js` traite les fichiers déposés, écrit `data/<AAAA-MM>.json` et `public/ics/<AAAA-MM>/<prénom>.ics`, puis reconstruit les abonnements `public/ics/<prénom>.ics`, le manifeste et les pages.
 - `site/upload.js` (page d’ajout) réutilise dans le navigateur `parse-planning.js`, `util.js`, `names.js` et SheetJS, copiés dans `public/assets/` à chaque publication, puis envoie le fichier au service de dépôt et suit l’exécution de l’Action.

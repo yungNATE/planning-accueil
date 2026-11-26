@@ -38,17 +38,17 @@ test('fichier illisible ou mal nommé : message qui explique quoi faire', (t) =>
   assert.match(report.files[1].errors[0].message, /introuvable/);
 });
 
-test('classeur à plusieurs onglets : chaque mois est publié', (t) => {
+test('classeur à plusieurs onglets : seul l’onglet du mois indiqué par le nom est publié', (t) => {
   const root = makeRoot();
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const wb = XLSX.read(readFileSync(OCTOBER), { type: 'buffer', cellNF: true, cellStyles: true });
   XLSX.utils.book_append_sheet(wb, november.Sheets.Feuil1, 'Novembre');
-  writeFileSync(path.join(root, 'plannings', 'ANNEE.xlsx'), XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
-  const report = runProcess({ root, files: ['plannings/ANNEE.xlsx'], now: NOW });
-  assert.deepEqual(report.processedMonths, ['2026-10', '2026-11']);
-  assert.match(report.files[1].file, /onglet « Novembre »/);
+  writeFileSync(path.join(root, 'plannings', 'PLANNING NOVEMBRE 2026.xlsx'), XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+  const report = runProcess({ root, files: ['plannings/PLANNING NOVEMBRE 2026.xlsx'], now: NOW });
+  assert.deepEqual(report.processedMonths, ['2026-11']);
+  assert.ok(report.files[0].warnings.some((w) => /seul l’onglet « Novembre »/.test(w.message)));
   const manifest = JSON.parse(readFileSync(path.join(root, 'public', 'manifest.json'), 'utf8'));
-  assert.deepEqual(manifest.months.map((m) => m.month), ['2026-11', '2026-10']);
+  assert.deepEqual(manifest.months.map((m) => m.month), ['2026-11']);
 });
 
 test('agendas mensuels effacés par erreur : reconstitués à la publication suivante', (t) => {
@@ -81,13 +81,13 @@ test('tout retraiter : les fichiers d’un même mois passent dans l’ordre de 
   const git = (...args) => execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'user.name=T', '-c', 'user.email=t@e.st', ...args], { cwd: root, env: { ...process.env, GIT_COMMITTER_DATE: args.at(-1), GIT_AUTHOR_DATE: args.at(-1) } });
   git('init', '-q', '-b', 'main');
   const oct = (cell) => buildPlanning({ title: 'PLANNING OCTOBRE 2026', start: '2026-09-28', weeks: 5, people: { NATHAN: fill(35, cell) } });
-  writeFileSync(path.join(root, 'plannings', 'Z_ANCIEN.xlsx'), XLSX.write(oct('8H-12H'), { type: 'buffer', bookType: 'xlsx' }));
+  writeFileSync(path.join(root, 'plannings', 'Z_OCTOBRE_ANCIEN.xlsx'), XLSX.write(oct('8H-12H'), { type: 'buffer', bookType: 'xlsx' }));
   git('add', '-A');
   git('commit', '-q', '-m', 'ancien', '--date', '2026-10-01T10:00:00Z');
-  writeFileSync(path.join(root, 'plannings', 'A_NOUVEAU.xlsx'), XLSX.write(oct('14H-18H'), { type: 'buffer', bookType: 'xlsx' }));
+  writeFileSync(path.join(root, 'plannings', 'A_OCTOBRE_NOUVEAU.xlsx'), XLSX.write(oct('14H-18H'), { type: 'buffer', bookType: 'xlsx' }));
   git('add', '-A');
   execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'user.name=T', '-c', 'user.email=t@e.st', 'commit', '-q', '-m', 'nouveau'], { cwd: root, env: { ...process.env, GIT_COMMITTER_DATE: '2026-10-05T10:00:00Z', GIT_AUTHOR_DATE: '2026-10-05T10:00:00Z' } });
-  assert.deepEqual(allPlannings(root), ['plannings/Z_ANCIEN.xlsx', 'plannings/A_NOUVEAU.xlsx']);
+  assert.deepEqual(allPlannings(root), ['plannings/Z_OCTOBRE_ANCIEN.xlsx', 'plannings/A_OCTOBRE_NOUVEAU.xlsx']);
   runProcess({ root, all: true, now: NOW });
   assert.match(readFileSync(path.join(root, 'public', 'ics', '2026-10', 'nathan.ics'), 'utf8'), /T140000/);
 });

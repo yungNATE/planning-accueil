@@ -1,8 +1,14 @@
 // Cas limites de lecture des plannings.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePlanning, parseWorkbook } from '../src/parse-planning.js';
-import { buildPlanning, fill, roundTrip, serial, week, workbookOf } from './helpers.js';
+import { monthFromFileName, parsePlanning as parseOne, parseWorkbook as parseAll } from '../src/parse-planning.js';
+import {
+  buildPlanning, fill, roundTrip, serial, sourceOf, week, workbookOf,
+} from './helpers.js';
+
+/** Le mois vient du nom du fichier : par défaut, celui du titre de la feuille de test */
+const parsePlanning = (wb, options = {}) => parseOne(wb, { source: sourceOf(wb), ...options });
+const parseWorkbook = (wb, options = {}) => parseAll(wb, { source: sourceOf(wb), ...options });
 
 const NOW = new Date('2026-11-26T12:00:00Z');
 const octoberWeeks = ['2026-09-28', '2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26'];
@@ -20,31 +26,43 @@ function october({ title = 'PLANNING OCTOBRE 2026', labels = week, people = { AL
 
 const parse = (rows, options = {}) => parsePlanning(workbookOf([{ rows }]), { now: NOW, ...options });
 
-test('titres : abréviation et année sur deux chiffres, minuscules, anglais, espace invisible', () => {
-  for (const title of ['PLANNING OCT. 26', 'Planning accueil – octobre 2026', 'ROSTER OCTOBER 2026', 'PLG OCTOBRE​ 2026']) {
-    const p = parse(october({ title }));
-    assert.equal(p.month, '2026-10', title);
-    assert.deepEqual(p.errors, [], title);
-  }
+test('mois lu dans le nom du fichier : casse, accents, abréviations, mots collés, année n’importe où', () => {
+  for (const [name, expected] of [
+    ['PLANNING_OCTOBRE_26.xlsx', { month: 10, year: 2026 }],
+    ['planning décembre.XLSX', { month: 12, year: null }],
+    ['Planning DÉCEMBRE 2026.xlsx', { month: 12, year: 2026 }],
+    ['2026-12 Planning décembre.xlsx', { month: 12, year: 2026 }],
+    ['PLANNINGOCTOBRE2026.xlsx', { month: 10, year: 2026 }],
+    ['Planning oct. 26.xlsx', { month: 10, year: 2026 }],
+    ['planning-aout.ods', { month: 8, year: null }],
+    ['Planning Marseille octobre.xlsx', { month: 10, year: null }],
+    ['ROSTER MAY 2027.xls', { month: 5, year: 2027 }],
+  ]) assert.deepEqual(monthFromFileName(name), expected, name);
+  assert.match(monthFromFileName('Classeur1.xlsx').error, /n’indique pas le mois/);
+  assert.match(monthFromFileName('MAISON.xlsx').error, /n’indique pas le mois/);
+  assert.match(monthFromFileName('Planning du 28 septembre au 1er novembre.xlsx').error, /plusieurs mois \(septembre, novembre\)/);
 });
 
-test('titre absent : mois lu dans le nom du fichier, avec avertissement', () => {
-  const p = parse(october({ title: 'PLANNING ACCUEIL' }), { source: 'PLANNING_OCTOBRE_26.xlsx' });
+test('le titre de la feuille est ignoré : seul le nom du fichier compte', () => {
+  const p = parse(october({ title: 'PLANNING NOVEMBRE 2026' }), { source: 'Planning octobre 2026.xlsx' });
   assert.equal(p.month, '2026-10');
-  assert.ok(p.warnings.some((w) => /nom du fichier/.test(w.message)));
+  assert.deepEqual(p.errors, []);
+  const refused = parse(october({ title: 'PLANNING OCTOBRE 2026' }), { source: 'Classeur1.xlsx' });
+  assert.equal(refused.ok, false);
 });
 
-test('titre sans année : année déduite des jours de la semaine', () => {
-  const p = parse(october({ title: 'PLANNING OCTOBRE' }));
+test('nom de fichier sans année : année déduite des jours de la semaine', () => {
+  const p = parse(october(), { source: 'Planning octobre.xlsx' });
   assert.equal(p.month, '2026-10');
   assert.equal(p.start, '2026-09-28');
-  assert.ok(p.warnings.some((w) => /n’indique pas l’année/.test(w.message)));
+  assert.ok(p.warnings.some((w) => /n’indique pas l’année : 2026/.test(w.message)));
 });
 
-test('titre saisi comme une date Excel au format « mmmm yyyy »', () => {
-  const rows = october({ title: '' });
-  const wb = workbookOf([{ rows, cells: { C1: { t: 'n', v: serial('2026-10-01'), z: 'mmmm yyyy' } } }]);
-  assert.equal(parsePlanning(wb, { now: NOW }).month, '2026-10');
+test('aucun jour dans le mois du nom de fichier : erreur', () => {
+  const rows = [['', '', 'PLANNING'], [], ['', 'JOURS', ...week('2026-11-02')], ['', 'ALICE', ...fill(7, '8H-12H')]];
+  const p = parse(rows, { source: 'Planning décembre 2026.xlsx' });
+  assert.equal(p.ok, false);
+  assert.match(p.errors[0].message, /ne tombe en décembre 2026/);
 });
 
 test('libellés de jours : abréviations, anglais, mois précisé', () => {
@@ -105,7 +123,7 @@ test('semaine en double : erreur', () => {
 
 test('colonne vide entre les noms et les jours', () => {
   const rows = october().map((row) => (row.length ? [row[0], row[1], '', ...row.slice(2)] : row));
-  const p = parse(rows);
+  const p = parse(rows, { source: 'Planning octobre 2026.xlsx' });
   assert.deepEqual(p.errors, []);
   assert.equal(p.employees[0].name, 'Alice');
 });
@@ -157,8 +175,8 @@ test('faute de frappe sur tout un mois : rattachée à la personne des mois pré
   assert.ok(p.warnings.some((w) => /ressemble à « Sylvain »/.test(w.message)));
 });
 
-test('titre qui ne correspond pas à la majorité des jours : avertissement', () => {
-  const p = parse(october({ title: 'PLANNING SEPTEMBRE 2026' }));
+test('nom de fichier qui ne correspond pas à la majorité des jours : avertissement', () => {
+  const p = parse(october(), { source: 'Planning septembre 2026.xlsx' });
   assert.equal(p.month, '2026-09');
   assert.ok(p.warnings.some((w) => /la plupart des jours sont en octobre 2026/.test(w.message)));
 });
@@ -168,24 +186,21 @@ test('prénom sans lettre latine : identifiant de fichier de secours', () => {
   assert.match(p.employees[0].slug, /^personne-[a-z0-9]+$/);
 });
 
-test('classeur à plusieurs onglets : un planning par mois, onglet masqué ignoré', () => {
+test('classeur à plusieurs onglets : l’onglet dont les jours correspondent au mois du nom est retenu', () => {
   const nov = buildPlanning({ title: 'PLANNING NOVEMBRE 2026', start: '2026-11-02', weeks: 4, people: { ALICE: fill(28, '9H-17H') } });
-  const wb = workbookOf([
+  const sheets = [
     { name: 'Octobre', rows: october() },
     { name: 'Novembre', rows: XLSXRows(nov) },
-    { name: 'Brouillon', rows: october({ title: 'PLANNING DECEMBRE 2026' }), hidden: true },
-  ]);
-  const { plannings, errors } = parseWorkbook(wb, { now: NOW });
-  assert.deepEqual(errors, []);
-  assert.deepEqual(plannings.map((p) => [p.sheet, p.month, p.ok]), [['Octobre', '2026-10', true], ['Novembre', '2026-11', true]]);
+    { name: 'Brouillon', rows: october(), hidden: true },
+  ];
+  for (const [source, sheet] of [['Planning novembre 2026.xlsx', 'Novembre'], ['Planning octobre 2026.xlsx', 'Octobre']]) {
+    const { plannings, errors } = parseAll(workbookOf(sheets), { source, now: NOW });
+    assert.deepEqual(errors, []);
+    assert.deepEqual(plannings.map((p) => [p.sheet, p.ok]), [[sheet, true]], source);
+    assert.ok(plannings[0].warnings.some((w) => /d’autres onglets de planning/.test(w.message)));
+  }
 });
 
-test('deux onglets pour le même mois : erreur', () => {
-  const wb = workbookOf([{ name: 'V1', rows: october() }, { name: 'V2', rows: october() }]);
-  const { plannings } = parseWorkbook(wb, { now: NOW });
-  assert.equal(plannings[1].ok, false);
-  assert.match(plannings[1].errors[0].message, /« V1 » et « V2 »/);
-});
 
 test('fichier sans planning : message explicite', () => {
   const { plannings, errors } = parseWorkbook(workbookOf([{ rows: [['Liste de courses'], ['pain']] }]));
@@ -211,39 +226,3 @@ function roundTripRows(ws) {
   return Array.from(rows, (row) => Array.from(row ?? [], (v) => v ?? ''));
 }
 
-test('planning sans aucun nom de mois : mois déduit des jours s’il n’y a qu’une possibilité', () => {
-  // Du lundi 30 novembre au dimanche 3 janvier : seul décembre 2026 colle, autour du 26 novembre 2026
-  const rows = [['', '', 'PLANNING ACCUEIL'], []];
-  for (const monday of ['2026-11-30', '2026-12-07', '2026-12-14', '2026-12-21', '2026-12-28']) {
-    rows.push(['', 'JOURS', ...week(monday)], ['', 'ALICE', ...fill(7, '8H-12H')], []);
-  }
-  const p = parsePlanning(workbookOf([{ rows }]), { source: 'Classeur1.xlsx', now: NOW });
-  assert.equal(p.month, '2026-12');
-  assert.equal(p.start, '2026-11-30');
-  assert.ok(p.warnings.some((w) => /décembre 2026 a été déduit des jours/.test(w.message)));
-});
-
-test('planning sans aucun nom de mois et jours ambigus : refusé, avec la marche à suivre', () => {
-  // « LUNDI 28 » : octobre 2026 (du 28 septembre) comme janvier 2027 (du 28 décembre)
-  const p = parsePlanning(workbookOf([{ rows: october({ title: 'PLANNING ACCUEIL' }) }]), { source: 'Classeur1.xlsx', now: NOW });
-  assert.equal(p.ok, false);
-  assert.match(p.errors[0].message, /octobre 2026 ou janvier 2027/);
-  assert.match(p.errors[0].message, /Ajoutez en haut de la feuille un titre/);
-});
-
-test('planning sans nom de mois mais jours saisis en dates Excel : mois certain', () => {
-  const rows = october({ title: '' });
-  const cells = {};
-  rows.forEach((row, r) => {
-    if (row[1] !== 'JOURS') return;
-    const monday = octoberWeeks[(r - 2) / 3];
-    for (let k = 0; k < 7; k++) {
-      const d = new Date(`${monday}T00:00:00Z`);
-      d.setUTCDate(d.getUTCDate() + k);
-      cells[`${String.fromCharCode(67 + k)}${r + 1}`] = { t: 'n', v: serial(d.toISOString().slice(0, 10)), z: 'dddd d' };
-    }
-  });
-  const p = parsePlanning(workbookOf([{ rows, cells }]), { source: 'Classeur1.xlsx', now: NOW });
-  assert.equal(p.month, '2026-10');
-  assert.deepEqual(p.errors, []);
-});
