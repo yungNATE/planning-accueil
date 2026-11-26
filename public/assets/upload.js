@@ -51,6 +51,8 @@ function el(tag, attrs = {}, ...children) {
 }
 
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+/** Raison exacte renvoyée par GitHub, pour la personne qui gère l'outil */
+const technicalDetail = (detail) => (detail ? el('span', { class: 'technical' }, `Détail technique : ${detail}`) : '');
 const ofMonth = (label) => (/^[ao]/.test(label) ? `d’${label}` : `de ${label}`);
 const link = (href, text) => el('a', { href, rel: 'noopener' }, text);
 const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
@@ -453,7 +455,8 @@ publishButton.addEventListener('click', async () => {
       setStatus('error',
         `${message} Prévenez la personne qui gère l’outil. En attendant, quelqu’un qui a accès au dépôt GitHub peut y déposer le fichier : `,
         link(`https://github.com/${REPO}/upload/main/plannings`, 'dossier plannings'),
-        '.');
+        '.',
+        technicalDetail(result.data.detail));
       break;
     }
   }
@@ -584,7 +587,8 @@ deleteList.addEventListener('click', async (event) => {
       ? UNREACHABLE
       : SERVICE_PROBLEMS.includes(erreur)
         ? `${message} Prévenez la personne qui gère l’outil.`
-        : message || `Le service de dépôt a renvoyé une erreur (${result.status}).`);
+        : message || `Le service de dépôt a renvoyé une erreur (${result.status}).`,
+    technicalDetail(result?.data?.detail));
     return;
   }
   setStatusOf(deleteStatus, 'progress', `Suppression du planning ${ofMonth(label)} en cours, environ une minute…`);
