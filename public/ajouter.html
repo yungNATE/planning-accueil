@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light dark">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://planning-accueil-depot.netlify.app; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
-  <title>Ajouter un planning – Plannings de l’accueil</title>
+  <title>Ajouter ou supprimer un planning – Plannings de l’accueil</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227%22%20fill%3D%22%230f5c5a%22%2F%3E%3Cg%20fill%3D%22%23fff%22%3E%3Crect%20x%3D%227%22%20y%3D%229%22%20width%3D%225%22%20height%3D%225%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%2214%22%20y%3D%229%22%20width%3D%225%22%20height%3D%225%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%2221%22%20y%3D%229%22%20width%3D%225%22%20height%3D%225%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%227%22%20y%3D%2217%22%20width%3D%225%22%20height%3D%225%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%2214%22%20y%3D%2217%22%20width%3D%225%22%20height%3D%225%22%20rx%3D%221%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E">
   <link rel="stylesheet" href="assets/styles.css">
   <script type="module" src="assets/upload.js"></script>
@@ -16,7 +16,7 @@
   <main class="page" data-upload data-service="https://planning-accueil-depot.netlify.app" data-repo="yungNATE/planning-accueil" data-published="[&quot;2026-10&quot;]" data-aliases="{}">
     <p class="back"><a href="./">Retour aux plannings</a></p>
     <header class="intro">
-      <h1>Ajouter un planning</h1>
+      <h1>Ajouter ou supprimer un planning</h1>
       <p>Choisissez le fichier Excel du mois (ou plusieurs) : il est vérifié ici, puis mis en ligne. Les agendas de chacun sont prêts dans la minute qui suit.</p>
     </header>
 
@@ -54,8 +54,22 @@
         <button type="button" class="button-primary" data-publish>Publier</button>
       </p>
       <div class="status" role="status" data-status></div>
-      <p class="token-info" data-token-info hidden>Mot de passe mémorisé sur cet appareil. <button type="button" class="link-button" data-forget>Oublier le mot de passe</button></p>
     </section>
+
+    <section class="step" id="etape-suppression" aria-labelledby="titre-suppression" hidden>
+      <h2 id="titre-suppression">Supprimer un mois publié</h2>
+      <p>Retire du site le planning du mois : son fichier Excel, les agendas du mois et ses jours dans les abonnements. Les agendas déjà téléchargés par chacun ne sont pas modifiés.</p>
+      <ul class="delete-list" role="list" data-delete-list>
+        <li class="delete-item" data-month="2026-10">
+          <span class="delete-item__name">Octobre 2026</span>
+          <button type="button" class="button-danger" data-delete="2026-10">Supprimer<span class="visually-hidden"> le planning d’octobre 2026</span></button>
+        </li>
+      </ul>
+      <p class="empty" data-delete-empty hidden>Aucun planning publié.</p>
+      <div class="status" role="status" data-delete-status></div>
+    </section>
+
+    <p class="token-info" data-token-info hidden>Mot de passe mémorisé sur cet appareil. <button type="button" class="link-button" data-forget>Oublier le mot de passe</button></p>
   </main>
 </body>
 </html>
