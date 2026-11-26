@@ -11,6 +11,8 @@
       "end": "2026-11-01",
       "dayCount": 35,
       "slotCount": 77,
+      "excel": "excel/2026-10.xlsx",
+      "excelName": "PLANNING_OCTOBRE_26.xlsx",
       "employees": [
         {
           "name": "Louna",
