@@ -108,8 +108,8 @@ test('alias : un nom épinglé n’est pas rapproché automatiquement', () => {
   assert.deepEqual(pinned.employees.map((e) => e.name), ['Sylvain', 'Syvain']);
 });
 
-test('titre introuvable : erreur explicite', () => {
-  const p = parsePlanning(roundTrip(buildPlanning({ title: 'PLANNING ACCUEIL', start: '2026-09-28', weeks: 1, people: { ALICE: fill(7, 'RH') } })));
+test('titre introuvable et jours loin d’aujourd’hui : erreur explicite', () => {
+  const p = parsePlanning(roundTrip(buildPlanning({ title: 'PLANNING ACCUEIL', start: '2026-09-28', weeks: 1, people: { ALICE: fill(7, 'RH') } })), { now: new Date('2026-05-15T12:00:00Z') });
   assert.equal(p.ok, false);
   assert.match(p.errors[0].message, /Titre introuvable/);
 });

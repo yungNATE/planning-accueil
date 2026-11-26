@@ -210,3 +210,40 @@ function roundTripRows(ws) {
   }
   return Array.from(rows, (row) => Array.from(row ?? [], (v) => v ?? ''));
 }
+
+test('planning sans aucun nom de mois : mois déduit des jours s’il n’y a qu’une possibilité', () => {
+  // Du lundi 30 novembre au dimanche 3 janvier : seul décembre 2026 colle, autour du 26 novembre 2026
+  const rows = [['', '', 'PLANNING ACCUEIL'], []];
+  for (const monday of ['2026-11-30', '2026-12-07', '2026-12-14', '2026-12-21', '2026-12-28']) {
+    rows.push(['', 'JOURS', ...week(monday)], ['', 'ALICE', ...fill(7, '8H-12H')], []);
+  }
+  const p = parsePlanning(workbookOf([{ rows }]), { source: 'Classeur1.xlsx', now: NOW });
+  assert.equal(p.month, '2026-12');
+  assert.equal(p.start, '2026-11-30');
+  assert.ok(p.warnings.some((w) => /décembre 2026 a été déduit des jours/.test(w.message)));
+});
+
+test('planning sans aucun nom de mois et jours ambigus : refusé, avec la marche à suivre', () => {
+  // « LUNDI 28 » : octobre 2026 (du 28 septembre) comme janvier 2027 (du 28 décembre)
+  const p = parsePlanning(workbookOf([{ rows: october({ title: 'PLANNING ACCUEIL' }) }]), { source: 'Classeur1.xlsx', now: NOW });
+  assert.equal(p.ok, false);
+  assert.match(p.errors[0].message, /octobre 2026 ou janvier 2027/);
+  assert.match(p.errors[0].message, /Ajoutez en haut de la feuille un titre/);
+});
+
+test('planning sans nom de mois mais jours saisis en dates Excel : mois certain', () => {
+  const rows = october({ title: '' });
+  const cells = {};
+  rows.forEach((row, r) => {
+    if (row[1] !== 'JOURS') return;
+    const monday = octoberWeeks[(r - 2) / 3];
+    for (let k = 0; k < 7; k++) {
+      const d = new Date(`${monday}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + k);
+      cells[`${String.fromCharCode(67 + k)}${r + 1}`] = { t: 'n', v: serial(d.toISOString().slice(0, 10)), z: 'dddd d' };
+    }
+  });
+  const p = parsePlanning(workbookOf([{ rows, cells }]), { source: 'Classeur1.xlsx', now: NOW });
+  assert.equal(p.month, '2026-10');
+  assert.deepEqual(p.errors, []);
+});
