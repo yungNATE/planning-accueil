@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deploiement.outputs.page_url }}
+      url: ${{ steps.deploiement.outputs.page_url || steps.deploiement2.outputs.page_url }}
     steps:
       - name: Récupérer le dépôt
         uses: actions/checkout@v6
@@ -96,8 +96,19 @@ jobs:
         with:
           path: public
 
+      # GitHub ne retrouve parfois pas l'archive juste après son envoi : un second essai suffit.
       - name: Publier sur GitHub Pages
         id: deploiement
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+
+      - name: Patienter avant un nouvel essai
+        if: steps.deploiement.outcome == 'failure'
+        run: sleep 20
+
+      - name: Publier sur GitHub Pages (nouvel essai)
+        id: deploiement2
+        if: steps.deploiement.outcome == 'failure'
         uses: actions/deploy-pages@v5
 
       - name: Signaler les plannings en erreur
