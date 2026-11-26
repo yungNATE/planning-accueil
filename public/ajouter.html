@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="color-scheme" content="light dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://api.github.com; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Ajouter un planning – Plannings de l’accueil</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227%22%20fill%3D%22%230f5c5a%22%2F%3E%3Cg%20fill%3D%22%23fff%22%3E%3Crect%20x%3D%227%22%20y%3D%229%22%20width%3D%225%22%20height%3D%225%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%2214%22%20y%3D%229%22%20width%3D%225%22%20height%3D%225%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%2221%22%20y%3D%229%22%20width%3D%225%22%20height%3D%225%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%227%22%20y%3D%2217%22%20width%3D%225%22%20height%3D%225%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%2214%22%20y%3D%2217%22%20width%3D%225%22%20height%3D%225%22%20rx%3D%221%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E">
+  <link rel="stylesheet" href="assets/styles.css">
+  <script type="module" src="assets/upload.js"></script>
+</head>
+<body>
+  <main class="page" data-upload data-repo="yungNATE/planning-accueil" data-branch="main" data-published="[&quot;2026-10&quot;]" data-aliases="{}">
+    <p class="back"><a href="./">Retour aux plannings</a></p>
+    <header class="intro">
+      <h1>Ajouter un planning</h1>
+      <p>Le fichier est vérifié ici, puis enregistré dans le dépôt GitHub. Les agendas sont générés et mis en ligne dans la minute qui suit.</p>
+    </header>
+
+    <noscript><p class="notice notice--error">Cette page a besoin de JavaScript. Vous pouvez aussi déposer le fichier directement sur GitHub, dans le dossier « plannings » du dépôt.</p></noscript>
+
+    <section class="step" id="etape-cle" aria-labelledby="titre-cle" hidden>
+      <h2 id="titre-cle">Clé d’accès GitHub</h2>
+      <p>Pour enregistrer un fichier dans le dépôt, le site a besoin d’une clé qui l’y autorise. Elle est demandée une seule fois et ne quitte pas cet appareil, sauf vers GitHub.</p>
+      <details class="howto">
+        <summary>Créer la clé</summary>
+        <ol>
+          <li>Ouvrez <a href="https://github.com/settings/personal-access-tokens/new" rel="noopener">la création de clé (fine-grained token) sur GitHub</a>, connecté au compte propriétaire du dépôt.</li>
+          <li>Donnez-lui un nom, par exemple « Plannings accueil », et une date d’expiration.</li>
+          <li>Dans « Repository access », choisissez « Only select repositories », puis <strong>planning-accueil</strong>.</li>
+          <li>Dans « Permissions », réglez <strong>Contents</strong> sur « Read and write » et <strong>Actions</strong> sur « Read-only ».</li>
+          <li>Validez, puis copiez la clé affichée (elle commence par <code>github_pat_</code>).</li>
+        </ol>
+      </details>
+      <form class="token-form" data-token-form novalidate>
+        <label for="cle">Clé d’accès</label>
+        <div class="field-row">
+          <input id="cle" name="cle" type="password" autocomplete="off" spellcheck="false" required aria-describedby="cle-erreur">
+          <button type="submit" class="button-primary">Enregistrer la clé</button>
+        </div>
+        <p class="checkbox">
+          <input id="memoriser" name="memoriser" type="checkbox" checked>
+          <label for="memoriser">Mémoriser la clé sur cet appareil</label>
+        </p>
+        <p class="field-error" id="cle-erreur" data-token-error></p>
+      </form>
+    </section>
+
+    <section class="step" id="etape-fichier" aria-labelledby="titre-fichier" hidden>
+      <h2 id="titre-fichier">Fichier du planning</h2>
+      <label class="dropzone" data-dropzone>
+        <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-file>
+        <span class="dropzone__title">Choisir le fichier Excel</span>
+        <span class="dropzone__hint">ou le glisser ici (.xlsx)</span>
+      </label>
+      <div class="preview" data-preview hidden></div>
+      <p class="actions" data-publish-row hidden>
+        <button type="button" class="button-primary" data-publish>Publier ce planning</button>
+      </p>
+      <div class="status" role="status" data-status></div>
+      <p class="token-info" data-token-info hidden>Clé enregistrée sur cet appareil. <button type="button" class="link-button" data-forget>Oublier la clé</button></p>
+    </section>
+  </main>
+</body>
+</html>
