@@ -1,117 +1,127 @@
 // Page « Ajouter un planning ».
 // 1. Le fichier est lu dans le navigateur avec le même parser que l'Action, pour signaler les erreurs avant l'envoi.
-// 2. Il est enregistré dans plannings/ via l'API GitHub, avec la clé d'accès de la personne qui publie.
-// 3. La page suit l'exécution de l'Action déclenchée par ce commit jusqu'à la mise en ligne.
+// 2. Il est envoyé au service de dépôt (fonction Netlify) avec le mot de passe de dépôt ;
+//    le service garde la clé GitHub et enregistre le fichier dans plannings/.
+// 3. La page suit l'exécution de l'Action déclenchée par ce dépôt jusqu'à la mise en ligne.
 
 const root = document.querySelector('[data-upload]');
+const SERVICE = root.dataset.service;
 const REPO = root.dataset.repo;
-const BRANCH = root.dataset.branch || 'main';
 const PUBLISHED = new Set(JSON.parse(root.dataset.published || '[]'));
 const ALIASES = JSON.parse(root.dataset.aliases || '{}');
-const TOKEN_KEY = 'planning-accueil:cle-github';
+const PASSWORD_KEY = 'planning-accueil:mot-de-passe';
 const POLL_MS = Number(root.dataset.pollMs) || 5000;
 const FOLLOW_LIMIT_MS = 6 * 60 * 1000;
+const SERVICE_PROBLEMS = ['cle-github', 'droits-github', 'configuration'];
 
 const $ = (selector) => root.querySelector(selector);
-const stepToken = $('#etape-cle');
+const stepPassword = $('#etape-cle');
 const stepFile = $('#etape-fichier');
-const tokenForm = $('[data-token-form]');
-const tokenError = $('[data-token-error]');
+const passwordForm = $('[data-token-form]');
+const passwordError = $('[data-token-error]');
 const fileInput = $('[data-file]');
 const dropzone = $('[data-dropzone]');
 const preview = $('[data-preview]');
 const publishRow = $('[data-publish-row]');
 const publishButton = $('[data-publish]');
 const statusBox = $('[data-status]');
-const tokenInfo = $('[data-token-info]');
+const passwordInfo = $('[data-token-info]');
 
 /* ------------------------------------------------------------------ */
-/* Clé d'accès                                                         */
+/* Mot de passe                                                        */
 /* ------------------------------------------------------------------ */
 
-function storedToken() {
+function storedPassword() {
   try {
-    return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || '';
+    localStorage.removeItem('planning-accueil:cle-github'); // ancienne version de la page
+    return sessionStorage.getItem(PASSWORD_KEY) || localStorage.getItem(PASSWORD_KEY) || '';
   } catch {
     return '';
   }
 }
 
-function storeToken(token, remember) {
+function storePassword(value, remember) {
   try {
-    (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, token);
-  } catch { /* stockage indisponible : la clé reste en mémoire pour cette page */ }
+    (remember ? localStorage : sessionStorage).setItem(PASSWORD_KEY, value);
+  } catch { /* stockage indisponible : le mot de passe reste en mémoire pour cette page */ }
 }
 
-function forgetToken() {
+function forgetPassword() {
   try {
-    localStorage.removeItem(TOKEN_KEY);
-    sessionStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(PASSWORD_KEY);
+    sessionStorage.removeItem(PASSWORD_KEY);
   } catch { /* rien à faire */ }
 }
 
-let token = storedToken();
+let password = storedPassword();
 
-async function github(path, options = {}) {
-  return fetch(`https://api.github.com${path}`, {
-    ...options,
-    headers: {
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      Authorization: `Bearer ${token}`,
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-    },
+/**
+ * Appel au service de dépôt. Rejette une TypeError si le service est injoignable.
+ * @returns {Promise<{ ok: boolean, status: number, data: any }>}
+ */
+async function service(route, payload = {}) {
+  const response = await fetch(`${SERVICE}/api/${route}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ motDePasse: password, ...payload }),
   });
+  let data = {};
+  try { data = await response.json(); } catch { /* réponse sans JSON */ }
+  return { ok: response.ok, status: response.status, data };
 }
+
+const UNREACHABLE = 'Le service de dépôt ne répond pas. Vérifiez la connexion internet, puis réessayez.';
 
 function showStep() {
-  stepToken.hidden = Boolean(token);
-  stepFile.hidden = !token;
-  tokenInfo.hidden = !token;
+  stepPassword.hidden = Boolean(password);
+  stepFile.hidden = !password;
+  passwordInfo.hidden = !password;
 }
 
-tokenForm.addEventListener('submit', async (event) => {
+function askPassword(message) {
+  const input = passwordForm.elements.cle;
+  passwordError.textContent = message;
+  if (message) input.setAttribute('aria-invalid', 'true');
+  else input.removeAttribute('aria-invalid');
+  input.focus();
+}
+
+passwordForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const input = tokenForm.elements.cle;
-  const value = input.value.trim();
-  tokenError.textContent = '';
-  input.removeAttribute('aria-invalid');
-  if (!value) {
-    tokenError.textContent = 'Collez la clé créée sur GitHub.';
-    input.setAttribute('aria-invalid', 'true');
-    input.focus();
+  const input = passwordForm.elements.cle;
+  const value = input.value;
+  askPassword('');
+  if (!value.trim()) {
+    askPassword('Saisissez le mot de passe de dépôt.');
     return;
   }
-  token = value;
-  let response;
+  password = value;
+  let result;
   try {
-    response = await github(`/repos/${REPO}`);
+    result = await service('verifier');
   } catch {
-    token = '';
-    tokenError.textContent = 'GitHub ne répond pas. Vérifiez la connexion internet, puis réessayez.';
+    password = '';
+    askPassword(UNREACHABLE);
     return;
   }
-  if (!response.ok) {
-    token = '';
-    tokenError.textContent = response.status === 401
-      ? 'GitHub refuse cette clé : elle est incorrecte ou expirée.'
-      : `Cette clé ne donne pas accès au dépôt ${REPO}.`;
-    input.setAttribute('aria-invalid', 'true');
-    input.focus();
+  if (!result.ok) {
+    password = '';
+    askPassword(result.data.message || `Le service de dépôt a renvoyé une erreur (${result.status}).`);
     return;
   }
-  storeToken(value, tokenForm.elements.memoriser.checked);
+  storePassword(value, passwordForm.elements.memoriser.checked);
   input.value = '';
+  passwordError.textContent = '';
   showStep();
   fileInput.focus();
 });
 
 $('[data-forget]').addEventListener('click', () => {
-  forgetToken();
-  token = '';
+  forgetPassword();
+  password = '';
   resetFile();
   showStep();
-  tokenForm.elements.cle.focus();
+  passwordForm.elements.cle.focus();
 });
 
 /* ------------------------------------------------------------------ */
@@ -159,10 +169,13 @@ function resetFile() {
   setStatus('');
 }
 
+const ofMonth = (label) => (/^[ao]/.test(label) ? `d’${label}` : `de ${label}`);
+const link = (href, text) => el('a', { href, rel: 'noopener' }, text);
+
 function issueList(title, issues, kind) {
   return el('div', { class: `notice notice--${kind}` },
     el('p', { class: 'notice__title' }, title),
-    el('ul', {}, ...issues.map((issue) => el('li', {}, issue.cell ? `${issue.cell} : ${issue.message}` : issue.message))));
+    el('ul', {}, ...issues.map((issue) => el('li', {}, issue.cell ? `Case ${issue.cell} : ${issue.message}` : issue.message))));
 }
 
 async function handleFile(file) {
@@ -250,73 +263,78 @@ function toBase64(buffer) {
   return btoa(binary);
 }
 
-const ofMonth = (label) => (/^[ao]/.test(label) ? `d’${label}` : `de ${label}`);
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
-const actionsUrl = () => `https://github.com/${REPO}/actions`;
-const link = (href, text) => el('a', { href, rel: 'noopener' }, text);
-
-function apiError(status) {
-  if (status === 401) return 'GitHub refuse la clé : elle est incorrecte ou expirée. Utilisez « Oublier la clé », puis enregistrez-en une nouvelle.';
-  if (status === 403 || status === 404) return 'La clé n’a pas le droit d’écrire dans le dépôt. Vérifiez sur GitHub que la permission « Contents » est réglée sur « Read and write ».';
-  if (status === 409 || status === 422) return 'Le dépôt a changé pendant l’envoi. Cliquez à nouveau sur « Publier ce planning ».';
-  return `GitHub a renvoyé une erreur (${status}). Réessayez dans quelques instants.`;
-}
 
 publishButton.addEventListener('click', async () => {
   if (!current?.parsed.ok) return;
   const { file, buffer, parsed } = current;
   const label = libs.monthLabel(parsed.month);
-  const path = `plannings/${file.name}`.split('/').map(encodeURIComponent).join('/');
   publishButton.disabled = true;
   setStatus('', 'Envoi du fichier…');
 
-  let commitSha;
+  let result;
   try {
-    const existing = await github(`/repos/${REPO}/contents/${path}?ref=${encodeURIComponent(BRANCH)}`);
-    if (!existing.ok && existing.status !== 404) throw new Error(apiError(existing.status));
-    const sha = existing.ok ? (await existing.json()).sha : undefined;
-    const response = await github(`/repos/${REPO}/contents/${path}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        message: `Planning ${label} déposé depuis le site`,
-        content: toBase64(buffer),
-        branch: BRANCH,
-        ...(sha ? { sha } : {}),
-      }),
-    });
-    if (!response.ok) throw new Error(apiError(response.status));
-    commitSha = (await response.json()).commit?.sha;
-  } catch (error) {
+    result = await service('deposer', { nom: file.name, contenu: toBase64(buffer), mois: label });
+  } catch {
     publishButton.disabled = false;
-    setStatus('error', error instanceof TypeError ? 'GitHub ne répond pas. Vérifiez la connexion internet, puis réessayez.' : error.message);
+    setStatus('error', UNREACHABLE);
     return;
   }
 
+  if (!result.ok) {
+    const { erreur, message = `Le service de dépôt a renvoyé une erreur (${result.status}).` } = result.data;
+    if (erreur === 'mot-de-passe') {
+      // Le mot de passe a été changé depuis qu'il a été mémorisé sur cet appareil
+      forgetPassword();
+      password = '';
+      resetFile();
+      showStep();
+      askPassword('Le mot de passe a changé : saisissez le nouveau, puis choisissez à nouveau le fichier.');
+      return;
+    }
+    if (SERVICE_PROBLEMS.includes(erreur)) {
+      // Problème durable côté service : la personne qui dépose ne peut pas le régler elle-même
+      setStatus('error',
+        `${message} Prévenez la personne qui gère l’outil. En attendant, quelqu’un qui a accès au dépôt GitHub peut y déposer le fichier : `,
+        link(`https://github.com/${REPO}/upload/main/plannings`, 'dossier plannings'),
+        '.');
+      return;
+    }
+    publishButton.disabled = false;
+    setStatus('error', message);
+    return;
+  }
+
+  const { sha } = result.data;
   setStatus('progress', 'Fichier enregistré. Génération des agendas et mise en ligne en cours, environ une minute…');
   const started = Date.now();
   while (Date.now() - started < FOLLOW_LIMIT_MS) {
     await sleep(POLL_MS);
-    let run;
+    let follow;
     try {
-      const response = await github(`/repos/${REPO}/actions/runs?head_sha=${commitSha}&per_page=1`);
-      if (!response.ok) continue;
-      run = (await response.json()).workflow_runs?.[0];
+      follow = await service('suivi', { sha });
     } catch {
       continue;
     }
-    if (!run || run.status !== 'completed') continue;
-    if (run.conclusion === 'success') {
+    if (!follow.ok) continue;
+    const { etat, lien } = follow.data;
+    if (etat === 'publie') {
       setStatus('success',
         `Planning ${ofMonth(label)} publié. `,
         link('./', 'Voir les plannings'),
         ' (si le mois n’apparaît pas encore, rechargez la page dans quelques minutes).');
       PUBLISHED.add(parsed.month);
-    } else {
-      setStatus('error', 'Le fichier est enregistré, mais la publication a échoué. ', link(run.html_url, 'Voir le détail sur GitHub'), '.');
+      return;
     }
-    return;
+    if (etat === 'echec') {
+      setStatus('error',
+        'Le fichier est bien enregistré, mais la mise en ligne a échoué. Prévenez la personne qui gère l’outil (',
+        link(lien, 'détail de l’erreur'),
+        ').');
+      return;
+    }
   }
-  setStatus('warning', 'Le fichier est enregistré, mais la publication n’est pas encore terminée. ', link(actionsUrl(), 'Suivre la publication sur GitHub'), '.');
+  setStatus('warning', 'Le fichier est enregistré, mais la mise en ligne n’est pas encore terminée. Revenez sur la page des plannings dans quelques minutes.');
 });
 
 showStep();
