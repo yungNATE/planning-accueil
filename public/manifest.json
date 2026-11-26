@@ -1,0 +1,68 @@
+{
+  "updatedAt": "2026-11-26T10:36:15.410Z",
+  "months": [
+    {
+      "month": "2026-10",
+      "label": "octobre 2026",
+      "title": "PLG ACCUEIL OCTOBRE 2026",
+      "source": "PLANNING_OCTOBRE_26.xlsx",
+      "processedAt": "2026-11-26T10:36:15.410Z",
+      "start": "2026-09-28",
+      "end": "2026-11-01",
+      "dayCount": 35,
+      "slotCount": 77,
+      "employees": [
+        {
+          "name": "Louna",
+          "slug": "louna",
+          "slotCount": 4,
+          "file": "ics/2026-10/louna.ics"
+        },
+        {
+          "name": "Nathan",
+          "slug": "nathan",
+          "slotCount": 25,
+          "file": "ics/2026-10/nathan.ics"
+        },
+        {
+          "name": "Sylvain",
+          "slug": "sylvain",
+          "slotCount": 24,
+          "file": "ics/2026-10/sylvain.ics"
+        },
+        {
+          "name": "Tom",
+          "slug": "tom",
+          "slotCount": 24,
+          "file": "ics/2026-10/tom.ics"
+        }
+      ]
+    }
+  ],
+  "subscriptions": [
+    {
+      "name": "Louna",
+      "slug": "louna",
+      "file": "ics/louna.ics",
+      "slotCount": 4
+    },
+    {
+      "name": "Nathan",
+      "slug": "nathan",
+      "file": "ics/nathan.ics",
+      "slotCount": 25
+    },
+    {
+      "name": "Sylvain",
+      "slug": "sylvain",
+      "file": "ics/sylvain.ics",
+      "slotCount": 24
+    },
+    {
+      "name": "Tom",
+      "slug": "tom",
+      "file": "ics/tom.ics",
+      "slotCount": 24
+    }
+  ]
+}

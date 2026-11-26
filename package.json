@@ -1,0 +1,21 @@
+{
+  "name": "planning-accueil",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Conversion des plannings Excel de l'accueil en calendriers .ics par employé",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "process": "node src/process.js",
+    "process:all": "node src/process.js --all"
+  },
+  "dependencies": {
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "ical.js": "^2.2.1"
+  }
+}

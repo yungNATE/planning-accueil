@@ -1,0 +1,1140 @@
+{
+  "version": 1,
+  "month": "2026-10",
+  "label": "octobre 2026",
+  "title": "PLG ACCUEIL OCTOBRE 2026",
+  "source": "PLANNING_OCTOBRE_26.xlsx",
+  "processedAt": "2026-11-26T10:36:15.410Z",
+  "start": "2026-09-28",
+  "end": "2026-11-01",
+  "days": [
+    "2026-09-28",
+    "2026-09-29",
+    "2026-09-30",
+    "2026-10-01",
+    "2026-10-02",
+    "2026-10-03",
+    "2026-10-04",
+    "2026-10-05",
+    "2026-10-06",
+    "2026-10-07",
+    "2026-10-08",
+    "2026-10-09",
+    "2026-10-10",
+    "2026-10-11",
+    "2026-10-12",
+    "2026-10-13",
+    "2026-10-14",
+    "2026-10-15",
+    "2026-10-16",
+    "2026-10-17",
+    "2026-10-18",
+    "2026-10-19",
+    "2026-10-20",
+    "2026-10-21",
+    "2026-10-22",
+    "2026-10-23",
+    "2026-10-24",
+    "2026-10-25",
+    "2026-10-26",
+    "2026-10-27",
+    "2026-10-28",
+    "2026-10-29",
+    "2026-10-30",
+    "2026-10-31",
+    "2026-11-01"
+  ],
+  "employees": [
+    {
+      "name": "Louna",
+      "slug": "louna",
+      "slotCount": 4,
+      "days": {
+        "2026-09-28": {
+          "raw": "15H30-23H",
+          "cell": "C7",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-09-29": {
+          "raw": "RH",
+          "cell": "D7",
+          "slots": []
+        },
+        "2026-09-30": {
+          "raw": "15H30-23H",
+          "cell": "E7",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-01": {
+          "raw": "15H30-23H",
+          "cell": "F7",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-02": {
+          "raw": "15H30-23H",
+          "cell": "G7",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-03": {
+          "raw": "",
+          "cell": "H7",
+          "slots": []
+        },
+        "2026-10-04": {
+          "raw": "",
+          "cell": "I7",
+          "slots": []
+        },
+        "2026-10-05": {
+          "raw": "",
+          "cell": "J7",
+          "slots": []
+        },
+        "2026-10-06": {
+          "raw": "",
+          "cell": "K7",
+          "slots": []
+        },
+        "2026-10-07": {
+          "raw": "",
+          "cell": "L7",
+          "slots": []
+        },
+        "2026-10-08": {
+          "raw": "",
+          "cell": "M7",
+          "slots": []
+        },
+        "2026-10-09": {
+          "raw": "",
+          "cell": "N7",
+          "slots": []
+        },
+        "2026-10-10": {
+          "raw": "",
+          "cell": "O7",
+          "slots": []
+        },
+        "2026-10-11": {
+          "raw": "",
+          "cell": "P7",
+          "slots": []
+        }
+      }
+    },
+    {
+      "name": "Nathan",
+      "slug": "nathan",
+      "slotCount": 25,
+      "days": {
+        "2026-09-28": {
+          "raw": "RH",
+          "cell": "C13",
+          "slots": []
+        },
+        "2026-09-29": {
+          "raw": "8H-15H30",
+          "cell": "D13",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-09-30": {
+          "raw": "8H-15H30",
+          "cell": "E13",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-01": {
+          "raw": "15H30-23H",
+          "cell": "F13",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-02": {
+          "raw": "15H30-18H",
+          "cell": "G13",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "18:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-03": {
+          "raw": "15H-22H",
+          "cell": "H13",
+          "slots": [
+            {
+              "start": "15:00",
+              "end": "22:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-04": {
+          "raw": "RH",
+          "cell": "I13",
+          "slots": []
+        },
+        "2026-10-05": {
+          "raw": "15H30-23H",
+          "cell": "J13",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-06": {
+          "raw": "15H30-23H",
+          "cell": "K13",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-07": {
+          "raw": "RH",
+          "cell": "L13",
+          "slots": []
+        },
+        "2026-10-08": {
+          "raw": "8H-15H30",
+          "cell": "M13",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-09": {
+          "raw": "8H-13H",
+          "cell": "N13",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "13:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-10": {
+          "raw": "RH",
+          "cell": "O13",
+          "slots": []
+        },
+        "2026-10-11": {
+          "raw": "15H-21H",
+          "cell": "P13",
+          "slots": [
+            {
+              "start": "15:00",
+              "end": "21:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-12": {
+          "raw": "8H-15H30",
+          "cell": "C23",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-13": {
+          "raw": "15H30-23H",
+          "cell": "D23",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-14": {
+          "raw": "15H30-23H",
+          "cell": "E23",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-15": {
+          "raw": "RH",
+          "cell": "F23",
+          "slots": []
+        },
+        "2026-10-16": {
+          "raw": "8H-13H",
+          "cell": "G23",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "13:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-17": {
+          "raw": "RH",
+          "cell": "H23",
+          "slots": []
+        },
+        "2026-10-18": {
+          "raw": "8H-15H",
+          "cell": "I23",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-19": {
+          "raw": "8H-15H30",
+          "cell": "J23",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-20": {
+          "raw": "15H30-23H",
+          "cell": "K23",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-21": {
+          "raw": "15H30-23H",
+          "cell": "L23",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-22": {
+          "raw": "RH",
+          "cell": "M23",
+          "slots": []
+        },
+        "2026-10-23": {
+          "raw": "8H-13H",
+          "cell": "N23",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "13:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-24": {
+          "raw": "RH",
+          "cell": "O23",
+          "slots": []
+        },
+        "2026-10-25": {
+          "raw": "15H-22H",
+          "cell": "P23",
+          "slots": [
+            {
+              "start": "15:00",
+              "end": "22:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-26": {
+          "raw": "15H30-23H",
+          "cell": "C34",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-27": {
+          "raw": "RH",
+          "cell": "D34",
+          "slots": []
+        },
+        "2026-10-28": {
+          "raw": "8H-15H30",
+          "cell": "E34",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-29": {
+          "raw": "15H30-23H",
+          "cell": "F34",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-30": {
+          "raw": "13H-18H",
+          "cell": "G34",
+          "slots": [
+            {
+              "start": "13:00",
+              "end": "18:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-31": {
+          "raw": "15H-22H",
+          "cell": "H34",
+          "slots": [
+            {
+              "start": "15:00",
+              "end": "22:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-11-01": {
+          "raw": "RH",
+          "cell": "I34",
+          "slots": []
+        }
+      }
+    },
+    {
+      "name": "Sylvain",
+      "slug": "sylvain",
+      "slotCount": 24,
+      "days": {
+        "2026-09-28": {
+          "raw": "RH",
+          "cell": "C9",
+          "slots": []
+        },
+        "2026-09-29": {
+          "raw": "15H30-23H",
+          "cell": "D9",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-09-30": {
+          "raw": "RH",
+          "cell": "E9",
+          "slots": []
+        },
+        "2026-10-01": {
+          "raw": "8H-15H30",
+          "cell": "F9",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-02": {
+          "raw": "18H-23H",
+          "cell": "G9",
+          "slots": [
+            {
+              "start": "18:00",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-03": {
+          "raw": "RH",
+          "cell": "H9",
+          "slots": []
+        },
+        "2026-10-04": {
+          "raw": "15H-22H",
+          "cell": "I9",
+          "slots": [
+            {
+              "start": "15:00",
+              "end": "22:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-05": {
+          "raw": "RH",
+          "cell": "J9",
+          "slots": []
+        },
+        "2026-10-06": {
+          "raw": "8H-15H30",
+          "cell": "K9",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-07": {
+          "raw": "15H30-23H",
+          "cell": "L9",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-08": {
+          "raw": "15H30-23H",
+          "cell": "M9",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-09": {
+          "raw": "18H-23H",
+          "cell": "N9",
+          "slots": [
+            {
+              "start": "18:00",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-10": {
+          "raw": "15H-22H",
+          "cell": "O9",
+          "slots": [
+            {
+              "start": "15:00",
+              "end": "22:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-11": {
+          "raw": "RH",
+          "cell": "P9",
+          "slots": []
+        },
+        "2026-10-12": {
+          "raw": "RH",
+          "cell": "C19",
+          "slots": []
+        },
+        "2026-10-13": {
+          "raw": "8H-15H30",
+          "cell": "D19",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-14": {
+          "raw": "RH",
+          "cell": "E19",
+          "slots": []
+        },
+        "2026-10-15": {
+          "raw": "15H30-23H",
+          "cell": "F19",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-16": {
+          "raw": "18H-23H",
+          "cell": "G19",
+          "slots": [
+            {
+              "start": "18:00",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-17": {
+          "raw": "15H-22H",
+          "cell": "H19",
+          "slots": [
+            {
+              "start": "15:00",
+              "end": "22:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-18": {
+          "raw": "15H-22H",
+          "cell": "I19",
+          "slots": [
+            {
+              "start": "15:00",
+              "end": "22:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-19": {
+          "raw": "RH",
+          "cell": "J19",
+          "slots": []
+        },
+        "2026-10-20": {
+          "raw": "8H-15H30",
+          "cell": "K19",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-21": {
+          "raw": "8H-15H30",
+          "cell": "L19",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-22": {
+          "raw": "8H-15H30",
+          "cell": "M19",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-23": {
+          "raw": "18H-23H",
+          "cell": "N19",
+          "slots": [
+            {
+              "start": "18:00",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-24": {
+          "raw": "15H-22H",
+          "cell": "O19",
+          "slots": [
+            {
+              "start": "15:00",
+              "end": "22:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-25": {
+          "raw": "RH",
+          "cell": "P19",
+          "slots": []
+        },
+        "2026-10-26": {
+          "raw": "RH",
+          "cell": "C30",
+          "slots": []
+        },
+        "2026-10-27": {
+          "raw": "8H-15H30",
+          "cell": "D30",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-28": {
+          "raw": "RH",
+          "cell": "E30",
+          "slots": []
+        },
+        "2026-10-29": {
+          "raw": "8H-15H30",
+          "cell": "F30",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-30": {
+          "raw": "18H-23H",
+          "cell": "G30",
+          "slots": [
+            {
+              "start": "18:00",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-31": {
+          "raw": "8H-15H",
+          "cell": "H30",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-11-01": {
+          "raw": "15H-22H",
+          "cell": "I30",
+          "slots": [
+            {
+              "start": "15:00",
+              "end": "22:00",
+              "overnight": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Tom",
+      "slug": "tom",
+      "slotCount": 24,
+      "days": {
+        "2026-09-28": {
+          "raw": "8H-15H30",
+          "cell": "C11",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-09-29": {
+          "raw": "MA",
+          "cell": "D11",
+          "slots": []
+        },
+        "2026-09-30": {
+          "raw": "RH",
+          "cell": "E11",
+          "slots": []
+        },
+        "2026-10-01": {
+          "raw": "RH",
+          "cell": "F11",
+          "slots": []
+        },
+        "2026-10-02": {
+          "raw": "8H-15H30",
+          "cell": "G11",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-03": {
+          "raw": "8H-15H",
+          "cell": "H11",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-04": {
+          "raw": "8H-15H",
+          "cell": "I11",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-05": {
+          "raw": "8H-15H30",
+          "cell": "J11",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-06": {
+          "raw": "RH",
+          "cell": "K11",
+          "slots": []
+        },
+        "2026-10-07": {
+          "raw": "8H-15H30",
+          "cell": "L11",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-08": {
+          "raw": "RH",
+          "cell": "M11",
+          "slots": []
+        },
+        "2026-10-09": {
+          "raw": "13H-18H",
+          "cell": "N11",
+          "slots": [
+            {
+              "start": "13:00",
+              "end": "18:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-10": {
+          "raw": "8H-15H",
+          "cell": "O11",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-11": {
+          "raw": "8H-15H",
+          "cell": "P11",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-12": {
+          "raw": "15H30-23H",
+          "cell": "C21",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-13": {
+          "raw": "RH",
+          "cell": "D21",
+          "slots": []
+        },
+        "2026-10-14": {
+          "raw": "8H-15H30",
+          "cell": "E21",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-15": {
+          "raw": "8H-15H30",
+          "cell": "F21",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-16": {
+          "raw": "13H-18H",
+          "cell": "G21",
+          "slots": [
+            {
+              "start": "13:00",
+              "end": "18:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-17": {
+          "raw": "8H-15H",
+          "cell": "H21",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-18": {
+          "raw": "RH",
+          "cell": "I21",
+          "slots": []
+        },
+        "2026-10-19": {
+          "raw": "15H30-23H",
+          "cell": "J21",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-20": {
+          "raw": "RH",
+          "cell": "K21",
+          "slots": []
+        },
+        "2026-10-21": {
+          "raw": "RH",
+          "cell": "L21",
+          "slots": []
+        },
+        "2026-10-22": {
+          "raw": "15H30-23H",
+          "cell": "M21",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-23": {
+          "raw": "13H-18H",
+          "cell": "N21",
+          "slots": [
+            {
+              "start": "13:00",
+              "end": "18:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-24": {
+          "raw": "8H-15H",
+          "cell": "O21",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-25": {
+          "raw": "8H-15H",
+          "cell": "P21",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-26": {
+          "raw": "8H-15H30",
+          "cell": "C32",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:30",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-27": {
+          "raw": "15H30-23H",
+          "cell": "D32",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-28": {
+          "raw": "15H30-23H",
+          "cell": "E32",
+          "slots": [
+            {
+              "start": "15:30",
+              "end": "23:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-29": {
+          "raw": "RH",
+          "cell": "F32",
+          "slots": []
+        },
+        "2026-10-30": {
+          "raw": "8H-13H",
+          "cell": "G32",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "13:00",
+              "overnight": false
+            }
+          ]
+        },
+        "2026-10-31": {
+          "raw": "RH",
+          "cell": "H32",
+          "slots": []
+        },
+        "2026-11-01": {
+          "raw": "8H-15H",
+          "cell": "I32",
+          "slots": [
+            {
+              "start": "08:00",
+              "end": "15:00",
+              "overnight": false
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "message": "« SYVAIN » a été considéré comme « Sylvain » (une lettre de différence). Si ce sont deux personnes différentes, ajoutez \"SYVAIN\": \"SYVAIN\" dans config/aliases.json.",
+      "cell": "B30"
+    }
+  ]
+}
