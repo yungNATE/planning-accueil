@@ -66,15 +66,26 @@ for (const dialog of document.querySelectorAll('dialog.sheet')) {
     button.addEventListener('click', async () => {
       const input = document.getElementById(button.dataset.copy);
       if (!input) return;
+      let copied = false;
       try {
         await navigator.clipboard.writeText(input.value);
+        copied = true;
       } catch {
+        input.focus();
         input.select();
-        document.execCommand('copy');
+        try { copied = document.execCommand('copy'); } catch { copied = false; }
       }
-      button.textContent = 'Copiée';
-      announce('Adresse copiée.');
-      setTimeout(() => { button.textContent = 'Copier'; }, 2500);
+      if (copied) {
+        button.textContent = 'Copiée';
+        announce('Adresse copiée.');
+      } else {
+        // Copie bloquée par le navigateur : l'adresse reste sélectionnée pour une copie manuelle
+        input.focus();
+        input.select();
+        button.textContent = 'Sélectionnée';
+        announce('Copie automatique impossible : l’adresse est sélectionnée, copiez-la avec Ctrl+C ou un appui long.');
+      }
+      setTimeout(() => { button.textContent = 'Copier'; }, 3000);
     });
   }
 }
